@@ -106,6 +106,38 @@ it("preserves empty table cells while escaping spoilers in cell text", () => {
   );
 });
 
+describe("tables that interrupt a paragraph", () => {
+  it("separates the header row from the line above", () => {
+    expect(prepareMarkdownSource("**Models**  \n| A | B |\n|---|---|\n| x | y |").render()).toBe(
+      "**Models**  \n\n| A | B |\n|---|---|\n| x | y |",
+    );
+    expect(prepareMarkdownSource("Intro\\\nA | B\n--- | ---").render()).toBe(
+      "Intro\n\nA | B\n--- | ---",
+    );
+  });
+  it("keeps quote markers and list indentation on the inserted line", () => {
+    expect(prepareMarkdownSource("> Intro\n> | A |\n> |---|").render()).toBe(
+      "> Intro\n>\n> | A |\n> |---|",
+    );
+    expect(prepareMarkdownSource("- Intro\n  | A |\n  |---|").render()).toBe(
+      "- Intro\n\n  | A |\n  |---|",
+    );
+  });
+  it("leaves tables that already start their own block", () => {
+    const source = "Intro\n\n| A |\n|---|\n\n- | A |\n  |---|";
+    expect(prepareMarkdownSource(source).render()).toBe(source);
+  });
+  it("renders the table through the library parser", async () => {
+    const source =
+      "**商用で使えるもの**（MIT）  \n| モデル | Elo |  \n|---|---|  \n| Kokoro | 1,060 |  ";
+    const tree = await parseMarkdown(prepareMarkdownSource(source).render(), {
+      hardSoftBreaks: true,
+      latexMath: false,
+    });
+    expect(tree.children?.map((node) => node.type)).toEqual(["Paragraph", "Table"]);
+  });
+});
+
 it.each([
   "src/components/message.tsx",
   "C:\\repo\\file.ts",
