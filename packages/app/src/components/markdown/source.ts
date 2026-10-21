@@ -33,6 +33,8 @@ function createFilePattern(path: string): RegExp {
 }
 
 const FILE_PATTERN = createFilePattern(PROSE_PATH);
+// A delimiter row's first cell, with or without its leading pipe.
+const TABLE_DELIMITER_ROW = /(?:^|\n)[ \t>]*\|?[ \t]*:?-+:?[ \t]*\|/;
 function linkMetadata(inlineCodePaths: ReadonlySet<string>) {
   // The engine accepts regexes on both platforms. Classify complete code spans
   // first, then pass literal matches rather than maintaining a second path grammar.
@@ -122,6 +124,7 @@ export function prepareMarkdownSource(
     !source.includes("![") &&
     !source.includes("||") &&
     !source.includes("&") &&
+    !TABLE_DELIMITER_ROW.test(source) &&
     !(workspaceRoot && source.includes("]("))
   ) {
     return { images, ...metadata, render: () => source };
@@ -159,6 +162,15 @@ export function prepareMarkdownSource(
   }
   // Line boundaries already turned into paragraph breaks, by offset of their newline.
   const splitBoundaries = new Set<number>();
+  // Continuation lines inside quotes and lists keep their quote markers on the blank line.
+  function splitAtLine(boundary: number, prefix: string) {
+    if (splitBoundaries.has(boundary)) return;
+    splitBoundaries.add(boundary);
+    // A trailing backslash was a hard break; at a paragraph end it would render literally.
+    const cut = source[boundary - 1] === "\\" ? boundary - 1 : boundary;
+    const blank = prefix.replace(/[^>]/g, " ").trimEnd();
+    edits.push({ start: cut, end: boundary + 1, text: `\n${blank}\n` });
+  }
   function isImageLike(node: PhrasingContent): boolean {
     if (node.type === "image" || node.type === "imageReference") return true;
     return (
@@ -183,24 +195,27 @@ export function prepareMarkdownSource(
       const aloneBefore = childStart === start || /^[\s>]*$/.test(prefix);
       const aloneAfter = /^\s*\\?$/.test(suffix);
       if (!aloneBefore || !aloneAfter) continue;
-      // Continuation lines inside quotes and lists keep their quote markers on the blank line.
-      const blank = prefix.replace(/[^>]/g, " ").trimEnd();
-      const split = (boundary: number) => {
-        if (splitBoundaries.has(boundary)) return;
-        splitBoundaries.add(boundary);
-        // A trailing backslash was a hard break; at a paragraph end it would render literally.
-        const cut = source[boundary - 1] === "\\" ? boundary - 1 : boundary;
-        edits.push({ start: cut, end: boundary + 1, text: `\n${blank}\n` });
-      };
-      if (lineStart > start) split(lineStart - 1);
-      if (lineEnd < end) split(lineEnd);
+      if (lineStart > start) splitAtLine(lineStart - 1, prefix);
+      if (lineEnd < end) splitAtLine(lineEnd, prefix);
     }
+  }
+  // GFM lets a table interrupt a paragraph, but MD4C only starts a table when the
+  // header row is the first line of its block. Separate it from the line above.
+  function separateTable(start: number) {
+    const lineStart = source.lastIndexOf("\n", start - 1) + 1;
+    if (lineStart === 0) return;
+    const prefix = source.slice(lineStart, start);
+    if (!/^[\s>]*$/.test(prefix)) return;
+    const previousLine = source.slice(source.lastIndexOf("\n", lineStart - 2) + 1, lineStart - 1);
+    if (/^[\s>]*$/.test(previousLine)) return;
+    splitAtLine(lineStart - 1, prefix);
   }
   function visit(node: Nodes) {
     const start = node.position?.start.offset;
     const end = node.position?.end.offset;
     if (start !== undefined && end !== undefined) {
       if (node.type === "paragraph") splitStandaloneImages(node, start, end);
+      if (node.type === "table") separateTable(start);
       if (node.type === "link") {
         const title = workspaceHoverTitle(node, source.slice(start, end), workspaceRoot);
         if (title !== null)
