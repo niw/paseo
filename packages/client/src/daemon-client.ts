@@ -578,6 +578,14 @@ export interface FileUploadInput {
   chunkSize?: number;
 }
 export type FileUploadResult = FileUploadResponse["payload"];
+export interface FileEntryUploadInput {
+  cwd: string;
+  parentPath: string;
+  name: string;
+  bytes: Uint8Array | ArrayBuffer;
+  requestId?: string;
+  chunkSize?: number;
+}
 type FileDownloadTokenPayload = FileDownloadTokenResponse["payload"];
 type ListProviderFeaturesPayload = ListProviderFeaturesResponseMessage["payload"];
 type ListProviderModelsPayload = ListProviderModelsResponseMessage["payload"];
@@ -5237,6 +5245,68 @@ export class DaemonClient {
       options: { skipQueue: true },
     });
 
+    return this.sendFileTransfer({
+      requestId: resolvedRequestId,
+      bytes,
+      metadata: { mime: input.mimeType, modifiedAt, fileName: input.fileName },
+      chunkSize: input.chunkSize,
+      uploadTransport,
+      responsePromise,
+    });
+  }
+
+  async uploadFileEntry(
+    input: FileEntryUploadInput,
+  ): Promise<CorrelatedResponsePayload<"fs.entry.upload.response">> {
+    const bytes = asUint8Array(input.bytes);
+    if (!bytes) {
+      throw new Error("File bytes are required.");
+    }
+    // The file frames bypass the send queue, so start only on an open connection.
+    await this.whenConnected();
+    const uploadTransport = this.transport;
+    const resolvedRequestId = this.createRequestId(input.requestId);
+    const responsePromise = this.sendCorrelatedRequest({
+      requestId: resolvedRequestId,
+      message: {
+        type: "fs.entry.upload.request",
+        cwd: input.cwd,
+        parentPath: input.parentPath,
+        name: input.name,
+        size: bytes.byteLength,
+        requestId: resolvedRequestId,
+      },
+      responseType: "fs.entry.upload.response",
+      // NOTE: No request timeout. A large file over a slow relay legitimately takes longer than
+      // the default, and a dead connection still rejects on disconnect.
+      timeout: 0,
+      options: { skipQueue: true },
+    });
+
+    return this.sendFileTransfer({
+      requestId: resolvedRequestId,
+      bytes,
+      metadata: {
+        mime: "application/octet-stream",
+        modifiedAt: new Date().toISOString(),
+        fileName: input.name,
+      },
+      chunkSize: input.chunkSize,
+      uploadTransport,
+      responsePromise,
+    });
+  }
+
+  /** Streams file bytes as transfer frames for a request whose response is already awaited. */
+  private async sendFileTransfer<Response>(input: {
+    requestId: string;
+    bytes: Uint8Array;
+    metadata: { mime: string; modifiedAt: string; fileName: string };
+    chunkSize: number | undefined;
+    uploadTransport: DaemonTransport | null;
+    responsePromise: Promise<Response>;
+  }): Promise<Response> {
+    const { requestId: resolvedRequestId, bytes, uploadTransport, responsePromise } = input;
     let settled = false;
     void responsePromise.then(
       () => {
@@ -5254,11 +5324,11 @@ export class DaemonClient {
           opcode: FileTransferOpcode.FileBegin,
           requestId: resolvedRequestId,
           metadata: {
-            mime: input.mimeType,
+            mime: input.metadata.mime,
             size: bytes.byteLength,
             encoding: "binary",
-            modifiedAt,
-            fileName: input.fileName,
+            modifiedAt: input.metadata.modifiedAt,
+            fileName: input.metadata.fileName,
           },
         }),
       );

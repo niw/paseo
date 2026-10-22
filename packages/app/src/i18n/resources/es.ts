@@ -480,6 +480,7 @@ export const es: TranslationResources = {
       copyRelativePath: "Copiar ruta relativa",
       revealIn: "Mostrar en {{target}}",
       download: "Descargar",
+      upload: "Subir archivos",
       addToChat: "Añadir al chat",
       moreActions: "Más acciones",
       newFile: "Nuevo archivo",
@@ -530,6 +531,7 @@ export const es: TranslationResources = {
         unavailable: "Workspaceno está disponible",
         loading: "Cargando archivos...",
       },
+      uploaded: "Subida completada",
       errors: {
         failedToListDirectory: "No se pudo listar el directorio",
         createFailed: "No se pudo crear la entrada",
@@ -537,6 +539,8 @@ export const es: TranslationResources = {
         duplicateFailed: "No se pudo duplicar la entrada",
         revealFailed: "No se pudo mostrar la entrada",
         deleteFailed: "No se pudo eliminar la entrada",
+        uploadFailed: "No se pudo subir el archivo",
+        uploadTooLarge: "{{fileName}} es demasiado grande (máx. {{size}})",
       },
       draft: {
         filePlaceholder: "Nombre del archivo",

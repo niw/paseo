@@ -1,4 +1,14 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -245,6 +255,135 @@ describe("file uploads", () => {
   });
 });
 
+describe("workspace entry uploads", () => {
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes the uploaded bytes into the workspace directory", async () => {
+    const workspace = makeWorkspace();
+    mkdirSync(join(workspace, "assets"));
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+    const bytes = new Uint8Array([0, 255, 1, 254, 2]);
+
+    uploads.beginEntryUpload(entryUploadRequest(workspace, "assets", "logo.png", bytes.length));
+    await expect(uploads.receiveFrame(uploadBegins("req-entry"))).resolves.toBeNull();
+    await expect(uploads.receiveFrame(uploadBytes("req-entry", bytes))).resolves.toBeNull();
+    await expect(uploads.receiveFrame(uploadEnds("req-entry"))).resolves.toEqual({
+      type: "fs.entry.upload.response",
+      payload: {
+        cwd: workspace,
+        parentPath: "assets",
+        path: "assets/logo.png",
+        success: true,
+        error: null,
+        requestId: "req-entry",
+      },
+    });
+    expect(new Uint8Array(readFileSync(join(workspace, "assets", "logo.png")))).toEqual(bytes);
+    expect(readdirSync(join(workspace, "assets"))).toEqual(["logo.png"]);
+  });
+
+  it("keeps the partial upload out of the target name until the upload ends", async () => {
+    const workspace = makeWorkspace();
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+
+    uploads.beginEntryUpload(entryUploadRequest(workspace, ".", "notes.txt", 11));
+    await uploads.receiveFrame(uploadBegins("req-entry"));
+    await uploads.receiveFrame(uploadChunk("req-entry", "hello"));
+
+    expect(existsSync(join(workspace, "notes.txt"))).toBe(false);
+    await uploads.receiveFrame(uploadChunk("req-entry", " world"));
+    await uploads.receiveFrame(uploadEnds("req-entry"));
+    expect(readFileSync(join(workspace, "notes.txt"), "utf8")).toBe("hello world");
+  });
+
+  it("refuses to replace an existing entry", async () => {
+    const workspace = makeWorkspace();
+    writeFileSync(join(workspace, "notes.txt"), "original");
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+
+    uploads.beginEntryUpload(entryUploadRequest(workspace, ".", "notes.txt", 11));
+    await expect(uploads.receiveFrame(uploadBegins("req-entry"))).resolves.toMatchObject({
+      type: "fs.entry.upload.response",
+      payload: { path: null, success: false, error: '"notes.txt" already exists' },
+    });
+    expect(readFileSync(join(workspace, "notes.txt"), "utf8")).toBe("original");
+    expect(readdirSync(workspace)).toEqual(["notes.txt"]);
+  });
+
+  it("keeps an entry created while the upload was in flight", async () => {
+    const workspace = makeWorkspace();
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+
+    uploads.beginEntryUpload(entryUploadRequest(workspace, ".", "notes.txt", 11));
+    await uploads.receiveFrame(uploadBegins("req-entry"));
+    await uploads.receiveFrame(uploadChunk("req-entry", "hello world"));
+    writeFileSync(join(workspace, "notes.txt"), "created meanwhile");
+
+    await expect(uploads.receiveFrame(uploadEnds("req-entry"))).resolves.toMatchObject({
+      payload: { success: false, error: '"notes.txt" already exists' },
+    });
+    expect(readFileSync(join(workspace, "notes.txt"), "utf8")).toBe("created meanwhile");
+    expect(readdirSync(workspace)).toEqual(["notes.txt"]);
+  });
+
+  it("rejects a parent directory outside the workspace", async () => {
+    const workspace = makeWorkspace();
+    const outside = makeWorkspace();
+    symlinkSync(outside, join(workspace, "escape"));
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+
+    uploads.beginEntryUpload(entryUploadRequest(workspace, "escape", "notes.txt", 11));
+    await expect(uploads.receiveFrame(uploadBegins("req-entry"))).resolves.toMatchObject({
+      payload: { success: false, error: "Access outside of workspace is not allowed" },
+    });
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
+  it("rejects names with path separators", async () => {
+    const workspace = makeWorkspace();
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+
+    uploads.beginEntryUpload(entryUploadRequest(workspace, ".", "../notes.txt", 11));
+    await expect(uploads.receiveFrame(uploadBegins("req-entry"))).resolves.toMatchObject({
+      payload: { success: false, error: "Name cannot contain path separators" },
+    });
+  });
+
+  it("removes the temporary file when the upload is cancelled", async () => {
+    const workspace = makeWorkspace();
+    const uploads = new FileUploadStore({ paseoHome: makePaseoHome() });
+
+    const cancel = uploads.beginEntryUpload(entryUploadRequest(workspace, ".", "notes.txt", 11));
+    await uploads.receiveFrame(uploadBegins("req-entry"));
+    await uploads.receiveFrame(uploadChunk("req-entry", "hello"));
+    expect(readdirSync(workspace)).toHaveLength(1);
+
+    await cancel();
+    expect(readdirSync(workspace)).toEqual([]);
+  });
+});
+
+function entryUploadRequest(cwd: string, parentPath: string, name: string, size: number) {
+  return {
+    type: "fs.entry.upload.request" as const,
+    cwd,
+    parentPath,
+    name,
+    size,
+    requestId: "req-entry",
+  };
+}
+
+function makeWorkspace(): string {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "file-upload-workspace-")));
+  tempDirs.push(root);
+  return root;
+}
+
 let uploadCount = 0;
 
 async function uploadNamed(uploads: FileUploadStore, fileName: string) {
@@ -260,8 +399,9 @@ async function uploadNamed(uploads: FileUploadStore, fileName: string) {
   await uploads.receiveFrame(uploadBegins(requestId));
   await uploads.receiveFrame(uploadChunk(requestId, "hello world"));
   const response = await uploads.receiveFrame(uploadEnds(requestId));
-  expect(response?.payload.error).toBeNull();
-  return response?.payload.file;
+  if (response?.type !== "file.upload.response") throw new Error("Expected an attachment upload");
+  expect(response.payload.error).toBeNull();
+  return response.payload.file;
 }
 
 function makePaseoHome(): string {
@@ -287,11 +427,15 @@ function uploadBegins(requestId: string): FileTransferFrame {
 }
 
 function uploadChunk(requestId: string, text: string): FileTransferFrame {
+  return uploadBytes(requestId, new TextEncoder().encode(text));
+}
+
+function uploadBytes(requestId: string, payload: Uint8Array): FileTransferFrame {
   return decodeUploadFrame(
     encodeFileTransferFrame({
       opcode: FileTransferOpcode.FileChunk,
       requestId,
-      payload: new TextEncoder().encode(text),
+      payload,
     }),
   );
 }

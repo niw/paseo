@@ -475,6 +475,7 @@ export const ko: TranslationResources = {
       copyRelativePath: "상대 경로 복사",
       revealIn: "{{target}}에서 보기",
       download: "다운로드",
+      upload: "파일 업로드",
       addToChat: "채팅에 추가",
       moreActions: "추가 작업",
       newFile: "새 파일",
@@ -525,6 +526,7 @@ export const ko: TranslationResources = {
         unavailable: "워크스페이스를 사용할 수 없습니다",
         loading: "파일 불러오는 중...",
       },
+      uploaded: "업로드했습니다",
       errors: {
         failedToListDirectory: "디렉터리 목록을 불러오지 못했습니다",
         createFailed: "항목을 만들지 못했습니다",
@@ -532,6 +534,8 @@ export const ko: TranslationResources = {
         duplicateFailed: "항목을 복제하지 못했습니다",
         revealFailed: "항목을 표시하지 못했습니다",
         deleteFailed: "항목을 삭제하지 못했습니다",
+        uploadFailed: "파일을 업로드하지 못했습니다",
+        uploadTooLarge: "{{fileName}} 파일이 너무 큽니다(최대 {{size}})",
       },
       draft: {
         filePlaceholder: "파일 이름",
