@@ -63,6 +63,15 @@ describe("built-in file panels", () => {
     expect(resolution.associatedPanelId).toBeNull();
   });
 
+  it.each(["mp4", "m4v", "mov", "webm", "mp3", "m4a", "aac", "wav", "ogg", "oga", "opus", "flac"])(
+    "opens %s files with the media panel",
+    (extension) => {
+      expect(candidateIds({ path: `clip.${extension.toUpperCase()}`, kind: "binary" })).toEqual([
+        "builtin:media",
+      ]);
+    },
+  );
+
   it("has no Source for files that are not text", () => {
     expect(candidateIds({ path: "archive.zip", kind: "binary" })).toEqual([]);
   });

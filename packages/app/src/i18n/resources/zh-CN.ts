@@ -1988,6 +1988,7 @@ export const zhCN: TranslationResources = {
         alwaysUseFilename: "始终用于 {{filename}}",
         option: "{{title}} — {{owner}}",
         builtin: {
+          media: "媒体",
           owner: "Paseo",
           markdown: "Markdown",
           html: "HTML",
