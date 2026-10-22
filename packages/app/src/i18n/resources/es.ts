@@ -2200,16 +2200,30 @@ export const es: TranslationResources = {
         label: "Envío predeterminado",
         descriptions: {
           interrupt:
-            "Cuando el agente se está ejecutando, Enter interrumpe. Command/Ctrl+Enter pone en cola.",
+            "Cuando el agente se está ejecutando, {{send}} interrumpe. {{alternate}} pone en cola.",
           steer:
-            "Cuando el agente se está ejecutando, Enter dirige el turno activo. Command/Ctrl+Enter pone en cola.",
-          queue:
-            "Cuando el agente se está ejecutando, Enter pone en cola. Command/Ctrl+Enter envía.",
+            "Cuando el agente se está ejecutando, {{send}} dirige el turno activo. {{alternate}} pone en cola.",
+          queue: "Cuando el agente se está ejecutando, {{send}} pone en cola. {{alternate}} envía.",
         },
         options: {
           interrupt: "Interrumpir",
           steer: "Dirigir",
           queue: "Cola",
+        },
+      },
+      sendKey: {
+        label: "Enviar con",
+        descriptions: {
+          enter: "Enter envía. Shift+Enter añade una nueva línea.",
+          "mod-enter": "Command/Ctrl+Enter envía. Enter añade una nueva línea.",
+        },
+        options: {
+          enter: "Enter",
+          "mod-enter": "Command/Ctrl+Enter",
+        },
+        alternate: {
+          enter: "Command/Ctrl+Enter",
+          "mod-enter": "Command/Ctrl+Shift+Enter",
         },
       },
       serviceUrls: {

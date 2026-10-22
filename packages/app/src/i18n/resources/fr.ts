@@ -2198,16 +2198,31 @@ export const fr: TranslationResources = {
         label: "Envoi par défaut",
         descriptions: {
           interrupt:
-            "Quand l’agent est en cours d’exécution, Entrée l’interrompt. Cmd/Ctrl+Entrée met en file d’attente.",
+            "Quand l’agent est en cours d’exécution, {{send}} l’interrompt. {{alternate}} met en file d’attente.",
           steer:
-            "Quand l’agent est en cours d’exécution, Entrée réoriente le tour en cours. Cmd/Ctrl+Entrée met en file d’attente.",
+            "Quand l’agent est en cours d’exécution, {{send}} réoriente le tour en cours. {{alternate}} met en file d’attente.",
           queue:
-            "Quand l’agent est en cours d’exécution, Entrée met en file d’attente. Cmd/Ctrl+Entrée envoie.",
+            "Quand l’agent est en cours d’exécution, {{send}} met en file d’attente. {{alternate}} envoie.",
         },
         options: {
           interrupt: "Interrompre",
           steer: "Réorienter",
           queue: "File d’attente",
+        },
+      },
+      sendKey: {
+        label: "Envoyer avec",
+        descriptions: {
+          enter: "Entrée envoie. Maj+Entrée ajoute une nouvelle ligne.",
+          "mod-enter": "Cmd/Ctrl+Entrée envoie. Entrée ajoute une nouvelle ligne.",
+        },
+        options: {
+          enter: "Entrée",
+          "mod-enter": "Cmd/Ctrl+Entrée",
+        },
+        alternate: {
+          enter: "Cmd/Ctrl+Entrée",
+          "mod-enter": "Cmd/Ctrl+Maj+Entrée",
         },
       },
       serviceUrls: {

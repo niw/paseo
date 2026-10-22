@@ -2126,14 +2126,29 @@ export const zhCN: TranslationResources = {
       defaultSend: {
         label: "默认发送",
         descriptions: {
-          interrupt: "Agent 运行时，Enter 会中断。Command/Ctrl+Enter 会排队。",
-          steer: "Agent 运行时，Enter 会引导当前回合。Command/Ctrl+Enter 会排队。",
-          queue: "Agent 运行时，Enter 会排队。Command/Ctrl+Enter 会提交。",
+          interrupt: "Agent 运行时，{{send}} 会中断。{{alternate}} 会排队。",
+          steer: "Agent 运行时，{{send}} 会引导当前回合。{{alternate}} 会排队。",
+          queue: "Agent 运行时，{{send}} 会排队。{{alternate}} 会提交。",
         },
         options: {
           interrupt: "中断",
           steer: "引导",
           queue: "排队",
+        },
+      },
+      sendKey: {
+        label: "发送键",
+        descriptions: {
+          enter: "Enter 发送，Shift+Enter 换行。",
+          "mod-enter": "Command/Ctrl+Enter 发送，Enter 换行。",
+        },
+        options: {
+          enter: "Enter",
+          "mod-enter": "Command/Ctrl+Enter",
+        },
+        alternate: {
+          enter: "Command/Ctrl+Enter",
+          "mod-enter": "Command/Ctrl+Shift+Enter",
         },
       },
       serviceUrls: {

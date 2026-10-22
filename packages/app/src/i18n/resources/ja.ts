@@ -2170,15 +2170,30 @@ export const ja: TranslationResources = {
       defaultSend: {
         label: "デフォルトの送信",
         descriptions: {
-          interrupt: "エージェント実行中、Enterで中断します。Command/Ctrl+Enterでキューに追加。",
+          interrupt: "エージェント実行中、{{send}}で中断します。{{alternate}}でキューに追加。",
           steer:
-            "エージェント実行中、Enterで現在のターンに指示を送ります。Command/Ctrl+Enterでキューに追加。",
-          queue: "エージェント実行中、Enterでキューに追加します。Command/Ctrl+Enterで送信。",
+            "エージェント実行中、{{send}}で現在のターンに指示を送ります。{{alternate}}でキューに追加。",
+          queue: "エージェント実行中、{{send}}でキューに追加します。{{alternate}}で送信。",
         },
         options: {
           interrupt: "中断",
           steer: "指示",
           queue: "キュー",
+        },
+      },
+      sendKey: {
+        label: "送信キー",
+        descriptions: {
+          enter: "Enterで送信、Shift+Enterで改行します。",
+          "mod-enter": "Command/Ctrl+Enterで送信、Enterで改行します。",
+        },
+        options: {
+          enter: "Enter",
+          "mod-enter": "Command/Ctrl+Enter",
+        },
+        alternate: {
+          enter: "Command/Ctrl+Enter",
+          "mod-enter": "Command/Ctrl+Shift+Enter",
         },
       },
       serviceUrls: {

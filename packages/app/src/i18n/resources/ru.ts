@@ -2184,16 +2184,31 @@ export const ru: TranslationResources = {
         label: "Отправка по умолчанию",
         descriptions: {
           interrupt:
-            "Когда агент работает, Enter прерывает его работу, а Command/Ctrl+Enter ставит сообщение в очередь.",
+            "Когда агент работает, {{send}} прерывает его работу, а {{alternate}} ставит сообщение в очередь.",
           steer:
-            "Когда агент работает, Enter дополняет текущий ответ новым указанием, а Command/Ctrl+Enter ставит сообщение в очередь.",
+            "Когда агент работает, {{send}} дополняет текущий ответ новым указанием, а {{alternate}} ставит сообщение в очередь.",
           queue:
-            "Когда агент работает, Enter ставит сообщение в очередь, а Command/Ctrl+Enter отправляет его.",
+            "Когда агент работает, {{send}} ставит сообщение в очередь, а {{alternate}} отправляет его.",
         },
         options: {
           interrupt: "Прерывать",
           steer: "Направить",
           queue: "Поставить в очередь",
+        },
+      },
+      sendKey: {
+        label: "Отправка",
+        descriptions: {
+          enter: "Enter отправляет, Shift+Enter добавляет новую строку.",
+          "mod-enter": "Command/Ctrl+Enter отправляет, Enter добавляет новую строку.",
+        },
+        options: {
+          enter: "Enter",
+          "mod-enter": "Command/Ctrl+Enter",
+        },
+        alternate: {
+          enter: "Command/Ctrl+Enter",
+          "mod-enter": "Command/Ctrl+Shift+Enter",
         },
       },
       serviceUrls: {

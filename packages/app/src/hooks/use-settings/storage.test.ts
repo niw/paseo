@@ -53,6 +53,22 @@ describe("loadAppSettingsFromStorage", () => {
     expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("steer");
   });
 
+  it("preserves a persisted send key and falls back to Enter for unknown values", async () => {
+    const persisted = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ sendKey: "mod-enter" }),
+      }),
+    });
+    expect((await loadAppSettingsFromStorage(persisted)).sendKey).toBe("mod-enter");
+
+    const unknown = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ sendKey: "future-key" }),
+      }),
+    });
+    expect((await loadAppSettingsFromStorage(unknown)).sendKey).toBe("enter");
+  });
+
   it("keeps valid settings when another build wrote unknown fields or enum values", async () => {
     const stored = {
       theme: "dark",

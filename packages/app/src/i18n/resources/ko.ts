@@ -2160,16 +2160,31 @@ export const ko: TranslationResources = {
         label: "기본 전송",
         descriptions: {
           interrupt:
-            "에이전트가 실행 중일 때 Enter는 중단합니다. Command/Ctrl+Enter는 대기열에 추가합니다.",
+            "에이전트가 실행 중일 때 {{send}}는 중단합니다. {{alternate}}는 대기열에 추가합니다.",
           steer:
-            "에이전트가 실행 중일 때 Enter는 현재 턴에 지시합니다. Command/Ctrl+Enter는 대기열에 추가합니다.",
+            "에이전트가 실행 중일 때 {{send}}는 현재 턴에 지시합니다. {{alternate}}는 대기열에 추가합니다.",
           queue:
-            "에이전트가 실행 중일 때 Enter는 대기열에 추가합니다. Command/Ctrl+Enter는 제출합니다.",
+            "에이전트가 실행 중일 때 {{send}}는 대기열에 추가합니다. {{alternate}}는 제출합니다.",
         },
         options: {
           interrupt: "중단",
           steer: "지시",
           queue: "대기열",
+        },
+      },
+      sendKey: {
+        label: "보내기 키",
+        descriptions: {
+          enter: "Enter로 보내고 Shift+Enter로 줄을 바꿉니다.",
+          "mod-enter": "Command/Ctrl+Enter로 보내고 Enter로 줄을 바꿉니다.",
+        },
+        options: {
+          enter: "Enter",
+          "mod-enter": "Command/Ctrl+Enter",
+        },
+        alternate: {
+          enter: "Command/Ctrl+Enter",
+          "mod-enter": "Command/Ctrl+Shift+Enter",
         },
       },
       serviceUrls: {

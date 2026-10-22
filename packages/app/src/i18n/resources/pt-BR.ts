@@ -2184,15 +2184,30 @@ export const ptBR: TranslationResources = {
         label: "Envio padrão",
         descriptions: {
           interrupt:
-            "Quando o agente está em execução, Enter interrompe. Command/Ctrl+Enter enfileira.",
+            "Quando o agente está em execução, {{send}} interrompe. {{alternate}} enfileira.",
           steer:
-            "Quando o agente está em execução, Enter orienta o turno ativo. Command/Ctrl+Enter enfileira.",
-          queue: "Quando o agente está em execução, Enter enfileira. Command/Ctrl+Enter envia.",
+            "Quando o agente está em execução, {{send}} orienta o turno ativo. {{alternate}} enfileira.",
+          queue: "Quando o agente está em execução, {{send}} enfileira. {{alternate}} envia.",
         },
         options: {
           interrupt: "Interromper",
           steer: "Orientar",
           queue: "Fila",
+        },
+      },
+      sendKey: {
+        label: "Enviar com",
+        descriptions: {
+          enter: "Enter envia. Shift+Enter adiciona uma nova linha.",
+          "mod-enter": "Command/Ctrl+Enter envia. Enter adiciona uma nova linha.",
+        },
+        options: {
+          enter: "Enter",
+          "mod-enter": "Command/Ctrl+Enter",
+        },
+        alternate: {
+          enter: "Command/Ctrl+Enter",
+          "mod-enter": "Command/Ctrl+Shift+Enter",
         },
       },
       serviceUrls: {
