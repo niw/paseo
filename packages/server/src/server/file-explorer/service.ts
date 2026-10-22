@@ -607,19 +607,99 @@ export type ExplorerEntryMutationResult =
   | { status: "ok"; path: string }
   | { status: "error"; error: string };
 
+export interface ExplorerUploadParams {
+  root: string;
+  parentPath: string;
+  name: string;
+}
+
+export type ExplorerUploadPreparation =
+  | { status: "ok"; path: string; targetPath: string; temporaryPath: string }
+  | { status: "error"; error: string };
+
+/**
+ * Reserves a hidden temporary file next to the upload target. The bytes are
+ * written there and `commitExplorerUpload` moves them into place, so a partial
+ * upload never appears under the final name.
+ */
+export async function prepareExplorerUpload({
+  root,
+  parentPath,
+  name,
+}: ExplorerUploadParams): Promise<ExplorerUploadPreparation> {
+  const validatedName = validateEntryName(name);
+  if (validatedName.status === "error") {
+    return validatedName;
+  }
+  const trimmedName = validatedName.name;
+
+  try {
+    const parent = await resolveScopedPath({ root, relativePath: parentPath });
+    const parentStats = await fs.stat(parent.resolvedPath);
+    if (!parentStats.isDirectory()) {
+      return { status: "error", error: "Parent path is not a directory" };
+    }
+    const targetPath = path.join(parent.resolvedPath, trimmedName);
+    if (await entryExists(targetPath)) {
+      return { status: "error", error: `"${trimmedName}" already exists` };
+    }
+    const temporaryPath = path.join(parent.resolvedPath, `.paseo-${randomUUID()}.upload`);
+    const handle = await fs.open(temporaryPath, "wx", 0o644);
+    await handle.close();
+    return {
+      status: "ok",
+      path: normalizeRelativePath({
+        root,
+        targetPath: path.join(parent.requestedPath, trimmedName),
+      }),
+      targetPath,
+      temporaryPath,
+    };
+  } catch (error) {
+    return { status: "error", error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Moves an uploaded temporary file to its target without replacing an entry
+ * created there while the upload was in flight.
+ */
+export async function commitExplorerUpload({
+  temporaryPath,
+  targetPath,
+}: {
+  temporaryPath: string;
+  targetPath: string;
+}): Promise<void> {
+  try {
+    try {
+      await fs.link(temporaryPath, targetPath);
+    } catch (error) {
+      if (isEntryExistsError(error)) throw error;
+      // NOTE: Some file systems (FAT, some network mounts) have no hard links.
+      await fs.copyFile(temporaryPath, targetPath, constants.COPYFILE_EXCL);
+    }
+  } catch (error) {
+    if (isEntryExistsError(error)) {
+      throw new Error(`"${path.basename(targetPath)}" already exists`, { cause: error });
+    }
+    throw error;
+  } finally {
+    await fs.unlink(temporaryPath).catch(() => undefined);
+  }
+}
+
 export async function createExplorerEntry({
   root,
   parentPath,
   name,
   kind,
 }: ExplorerCreateEntryParams): Promise<ExplorerEntryMutationResult> {
-  const trimmedName = name.trim();
-  if (!trimmedName || trimmedName === "." || trimmedName === "..") {
-    return { status: "error", error: "Invalid name" };
+  const validatedName = validateEntryName(name);
+  if (validatedName.status === "error") {
+    return validatedName;
   }
-  if (trimmedName.includes("/") || trimmedName.includes("\\")) {
-    return { status: "error", error: "Name cannot contain path separators" };
-  }
+  const trimmedName = validatedName.name;
 
   try {
     const parent = await resolveScopedPath({ root, relativePath: parentPath });
@@ -702,13 +782,11 @@ export async function renameExplorerEntry({
   relativePath,
   name,
 }: ExplorerRenameEntryParams): Promise<ExplorerEntryMutationResult> {
-  const trimmedName = name.trim();
-  if (!trimmedName || trimmedName === "." || trimmedName === "..") {
-    return { status: "error", error: "Invalid name" };
+  const validatedName = validateEntryName(name);
+  if (validatedName.status === "error") {
+    return validatedName;
   }
-  if (trimmedName.includes("/") || trimmedName.includes("\\")) {
-    return { status: "error", error: "Name cannot contain path separators" };
-  }
+  const trimmedName = validatedName.name;
 
   try {
     const source = await resolveScopedPath({ root, relativePath });
@@ -791,6 +869,29 @@ export async function deleteExplorerEntry({
       return { status: "error", error: "File or folder no longer exists" };
     }
     return { status: "error", error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function validateEntryName(
+  name: string,
+): { status: "ok"; name: string } | { status: "error"; error: string } {
+  const trimmedName = name.trim();
+  if (!trimmedName || trimmedName === "." || trimmedName === "..") {
+    return { status: "error", error: "Invalid name" };
+  }
+  if (trimmedName.includes("/") || trimmedName.includes("\\")) {
+    return { status: "error", error: "Name cannot contain path separators" };
+  }
+  return { status: "ok", name: trimmedName };
+}
+
+async function entryExists(entryPath: string): Promise<boolean> {
+  try {
+    await fs.lstat(entryPath);
+    return true;
+  } catch (error) {
+    if (isMissingEntryError(error)) return false;
+    throw error;
   }
 }
 
