@@ -4,7 +4,24 @@ import { basename, extname, join } from "node:path";
 
 import { FileTransferOpcode, type FileTransferFrame } from "@getpaseo/protocol/binary-frames/index";
 import { getErrorMessage } from "@getpaseo/protocol/error-utils";
-import type { FileUploadRequest, FileUploadResponse } from "../messages.js";
+import type {
+  FileEntryUploadRequest,
+  FileEntryUploadResponse,
+  FileUploadRequest,
+  FileUploadResponse,
+} from "../messages.js";
+import { commitExplorerUpload, prepareExplorerUpload } from "../file-explorer/service.js";
+
+type UploadResponse = FileUploadResponse | FileEntryUploadResponse;
+
+/** Where an upload's bytes land and how the finished file is reported. */
+interface UploadTarget {
+  /** Creates an empty writable file and returns its path. */
+  open(): Promise<string>;
+  commit(): Promise<void>;
+  discard(): Promise<void>;
+  respond(error: string | null): UploadResponse;
+}
 
 interface FileUploadStoreOptions {
   paseoHome: string;
@@ -13,16 +30,13 @@ interface FileUploadStoreOptions {
 
 interface PendingUpload {
   requestId: string;
-  id: string;
   source: object;
+  target: UploadTarget;
   completed: boolean;
-  finished(response: FileUploadResponse | null): void;
-  fileName: string;
-  mimeType: string;
+  finished(response: UploadResponse | null): void;
   size: number;
-  path: string;
+  writePath: string | null;
   receivedBytes: number;
-  started: boolean;
   staleTimeout: ReturnType<typeof setTimeout>;
   queue: Promise<void>;
   cleanup?: Promise<void>;
@@ -42,41 +56,103 @@ export class FileUploadStore {
       options.staleUploadTimeoutMs ?? FileUploadStore.defaultStaleUploadTimeoutMs;
   }
 
+  /** Receives a chat attachment into `$PASEO_HOME/uploads/<id>/`. */
   beginUpload(
     request: FileUploadRequest,
     source: object = this.defaultSource,
     finished: (response: FileUploadResponse | null) => void = () => {},
   ): () => Promise<void> {
-    const existingUpload = this.pending.get(source)?.get(request.requestId);
-    if (existingUpload) void this.cancel(existingUpload).catch(() => {});
-    const fileName = sanitizeFileName(request.fileName);
-    const id = `upload_${randomUUID()}`;
-    const uploadDir = join(this.paseoHome, "uploads", id);
-    const upload: PendingUpload = {
+    const target = this.createAttachmentTarget(request);
+    return this.begin({
       requestId: request.requestId,
-      id,
-      source,
-      completed: false,
-      finished,
-      fileName,
-      mimeType: request.mimeType,
       size: request.size,
-      path: join(uploadDir, fileName),
+      target,
+      source,
+      finished: (response) => finished(response?.type === "file.upload.response" ? response : null),
+    });
+  }
+
+  /** Receives a file into a workspace directory. */
+  beginEntryUpload(
+    request: FileEntryUploadRequest,
+    source: object = this.defaultSource,
+    finished: (response: FileEntryUploadResponse | null) => void = () => {},
+  ): () => Promise<void> {
+    return this.begin({
+      requestId: request.requestId,
+      size: request.size,
+      target: createWorkspaceTarget(request),
+      source,
+      finished: (response) =>
+        finished(response?.type === "fs.entry.upload.response" ? response : null),
+    });
+  }
+
+  private begin(input: {
+    requestId: string;
+    size: number;
+    target: UploadTarget;
+    source: object;
+    finished: (response: UploadResponse | null) => void;
+  }): () => Promise<void> {
+    const { requestId, source } = input;
+    const existingUpload = this.pending.get(source)?.get(requestId);
+    if (existingUpload) void this.cancel(existingUpload).catch(() => {});
+    const upload: PendingUpload = {
+      requestId,
+      source,
+      target: input.target,
+      completed: false,
+      finished: input.finished,
+      size: input.size,
+      writePath: null,
       receivedBytes: 0,
-      started: false,
-      staleTimeout: this.createStaleUploadTimeout(source, request.requestId),
+      staleTimeout: this.createStaleUploadTimeout(source, requestId),
       queue: Promise.resolve(),
     };
     const uploads = this.pending.get(source) ?? new Map<string, PendingUpload>();
-    uploads.set(request.requestId, upload);
+    uploads.set(requestId, upload);
     this.pending.set(source, uploads);
     return () => this.cancel(upload);
+  }
+
+  private createAttachmentTarget(request: FileUploadRequest): UploadTarget {
+    const fileName = sanitizeFileName(request.fileName);
+    const id = `upload_${randomUUID()}`;
+    const uploadDir = join(this.paseoHome, "uploads", id);
+    const uploadPath = join(uploadDir, fileName);
+    return {
+      open: async () => {
+        await mkdir(uploadDir, { recursive: true });
+        await writeFile(uploadPath, new Uint8Array());
+        return uploadPath;
+      },
+      commit: async () => {},
+      discard: () => rm(uploadDir, { recursive: true, force: true }),
+      respond: (error) => ({
+        type: "file.upload.response",
+        payload: {
+          requestId: request.requestId,
+          file: error
+            ? null
+            : {
+                type: "uploaded_file",
+                id,
+                fileName,
+                mimeType: request.mimeType,
+                size: request.size,
+                path: uploadPath,
+              },
+          error,
+        },
+      }),
+    };
   }
 
   async receiveFrame(
     frame: FileTransferFrame,
     source: object = this.defaultSource,
-  ): Promise<FileUploadResponse | null> {
+  ): Promise<UploadResponse | null> {
     const upload = this.pending.get(source)?.get(frame.requestId);
     if (!upload) {
       return null;
@@ -101,7 +177,7 @@ export class FileUploadStore {
   private async applyFrame(
     upload: PendingUpload,
     frame: FileTransferFrame,
-  ): Promise<FileUploadResponse | null> {
+  ): Promise<UploadResponse | null> {
     if (this.pending.get(upload.source)?.get(upload.requestId) !== upload) {
       return null;
     }
@@ -118,18 +194,16 @@ export class FileUploadStore {
       return await this.completeUpload(upload);
     } catch (error) {
       await this.removeFailedUpload(upload);
-      return buildUploadResponse(upload, getErrorMessage(error));
+      return upload.target.respond(getErrorMessage(error));
     }
   }
 
   private async startWriting(upload: PendingUpload): Promise<void> {
-    await mkdir(join(this.paseoHome, "uploads", upload.id), { recursive: true });
-    await writeFile(upload.path, new Uint8Array());
-    upload.started = true;
+    upload.writePath = await upload.target.open();
   }
 
   private async writeChunk(upload: PendingUpload, bytes: Uint8Array): Promise<void> {
-    if (!upload.started) {
+    if (!upload.writePath) {
       throw new Error("Upload chunks arrived before file begin.");
     }
     const nextReceivedBytes = upload.receivedBytes + bytes.byteLength;
@@ -138,21 +212,25 @@ export class FileUploadStore {
         `Upload exceeded declared size: expected ${upload.size}, received ${nextReceivedBytes}.`,
       );
     }
-    await appendFile(upload.path, bytes);
+    await appendFile(upload.writePath, bytes);
     upload.receivedBytes += bytes.byteLength;
   }
 
-  private async completeUpload(upload: PendingUpload): Promise<FileUploadResponse> {
+  private async completeUpload(upload: PendingUpload): Promise<UploadResponse> {
     this.clearPendingUpload(upload);
     if (upload.receivedBytes !== upload.size) {
-      await this.removeUploadDirectory(upload);
-      return buildUploadResponse(
-        upload,
+      await upload.target.discard();
+      return upload.target.respond(
         `Upload size mismatch: expected ${upload.size}, received ${upload.receivedBytes}.`,
       );
     }
+    if (!upload.writePath) {
+      await upload.target.discard();
+      return upload.target.respond("Upload ended before file begin.");
+    }
+    await upload.target.commit();
     upload.completed = true;
-    return buildUploadResponse(upload, null);
+    return upload.target.respond(null);
   }
 
   private createStaleUploadTimeout(
@@ -176,7 +254,7 @@ export class FileUploadStore {
     if (upload.cleanup) return upload.cleanup;
     this.clearPendingUpload(upload);
     upload.cleanup = upload.queue.then(async () => {
-      if (!upload.completed) await this.removeUploadDirectory(upload);
+      if (!upload.completed) await upload.target.discard();
       return undefined;
     });
     upload.finished(null);
@@ -192,31 +270,41 @@ export class FileUploadStore {
 
   private async removeFailedUpload(upload: PendingUpload): Promise<void> {
     this.clearPendingUpload(upload);
-    await this.removeUploadDirectory(upload);
-  }
-
-  private async removeUploadDirectory(upload: PendingUpload): Promise<void> {
-    await rm(join(this.paseoHome, "uploads", upload.id), { recursive: true, force: true });
+    await upload.target.discard();
   }
 }
 
-function buildUploadResponse(upload: PendingUpload, error: string | null): FileUploadResponse {
+function createWorkspaceTarget(request: FileEntryUploadRequest): UploadTarget {
+  let prepared: { path: string; targetPath: string; temporaryPath: string } | null = null;
   return {
-    type: "file.upload.response",
-    payload: {
-      requestId: upload.requestId,
-      file: error
-        ? null
-        : {
-            type: "uploaded_file",
-            id: upload.id,
-            fileName: upload.fileName,
-            mimeType: upload.mimeType,
-            size: upload.size,
-            path: upload.path,
-          },
-      error,
+    open: async () => {
+      const preparation = await prepareExplorerUpload({
+        root: request.cwd,
+        parentPath: request.parentPath,
+        name: request.name,
+      });
+      if (preparation.status === "error") throw new Error(preparation.error);
+      prepared = preparation;
+      return preparation.temporaryPath;
     },
+    commit: async () => {
+      if (!prepared) throw new Error("Upload ended before file begin.");
+      await commitExplorerUpload(prepared);
+    },
+    discard: async () => {
+      if (prepared) await rm(prepared.temporaryPath, { force: true });
+    },
+    respond: (error) => ({
+      type: "fs.entry.upload.response",
+      payload: {
+        cwd: request.cwd,
+        parentPath: request.parentPath,
+        path: error ? null : (prepared?.path ?? null),
+        success: error === null,
+        error,
+        requestId: request.requestId,
+      },
+    }),
   };
 }
 
