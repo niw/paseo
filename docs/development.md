@@ -3,7 +3,19 @@
 ## Prerequisites
 
 - Node.js (see `.tool-versions` for exact version)
-- npm workspaces (comes with Node)
+- npm 12 (the development version is recorded in `package.json`)
+
+## Installing dependencies
+
+Run `make install` or `npm ci`. The project's `.npmrc` overrides a user-level
+`ignore-scripts=true`, so root lifecycle scripts and build hooks run normally.
+Dependency scripts require approval in `package.json`'s `allowScripts` policy;
+`strict-allow-scripts` stops installation when a dependency needs review.
+Review changed dependencies before updating their version-pinned approvals.
+
+Git hooks are not installed: the root `prepare` hook is removed and Lefthook's
+own install script is denied. Dependency patches, Skia frameworks, and Markdown
+native assets are prepared during installation.
 
 ## Running the dev server
 
@@ -529,6 +541,16 @@ For tighter loops, you can rebuild a single workspace:
 - Changed `packages/protocol/src/*` or `packages/client/src/*`: `npm run build:client`.
 - Changed `packages/server/src/*`, `packages/cli/src/*`, `packages/relay/src/*`, or `packages/highlight/src/*`: `npm run build:server`.
 - Changed app build dependencies: `npm run build:app-deps`.
+
+## Running this checkout's daemon on another host
+
+`make cli-build` writes `artifacts/paseo-cli-<version>-<commit>.tgz` with the CLI, the daemon it runs, and the bundled daemon web UI. Copy it to the host and run:
+
+```bash
+npx -y ./paseo-cli-<version>-<commit>.tgz daemon restart
+```
+
+The checkout carries the published version number, so a plain `@getpaseo/cli` tarball would pull its sibling packages from the registry. The tarball bundles the `@getpaseo/*` packages instead. npm never installs the dependencies of bundled packages, so `scripts/pack-cli-bundle.mjs` declares them on the tarball itself, pinned to versions this checkout installed, and bundles a private copy where the packages need conflicting versions (server and plugin need different `@agentclientprotocol/sdk` majors). The other dependencies install on the host, so native modules such as `node-pty` match its platform.
 
 ## Dependency patches
 
