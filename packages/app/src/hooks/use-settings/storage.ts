@@ -34,6 +34,8 @@ export { APP_SETTINGS_KEY } from "./keys";
 export const APP_SETTINGS_QUERY_KEY = ["app-settings"];
 
 export type SendBehavior = ActiveTurnBehavior | "queue";
+/** Which Enter chord sends from the desktop composer; the other plain chord inserts a newline. */
+export type SendKey = "enter" | "mod-enter";
 export type ReleaseChannel = "stable" | "beta";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";
 export type WorkspaceTitleSource = "title" | "branch";
@@ -79,6 +81,7 @@ export interface AppSettings {
   pluginThemeId: string | null;
   language: AppLanguage;
   sendBehavior: SendBehavior;
+  sendKey: SendKey;
   serviceUrlBehavior: ServiceUrlBehavior;
   terminalScrollbackLines: number;
   uiFontFamily: string; // "" = platform default UI stack
@@ -139,6 +142,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   pluginThemeId: null,
   language: "system",
   sendBehavior: "steer",
+  sendKey: "enter",
   serviceUrlBehavior: "ask",
   terminalScrollbackLines: DEFAULT_TERMINAL_SCROLLBACK_LINES,
   uiFontFamily: "",
@@ -217,6 +221,7 @@ const StoredAppSettingsSchema = z
       .enum(["system", "ar", "en", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh-CN"])
       .catch("system"),
     sendBehavior: z.enum(["interrupt", "steer", "queue"]).catch("steer"),
+    sendKey: z.enum(["enter", "mod-enter"]).catch("enter"),
     serviceUrlBehavior: z.enum(["ask", "in-app", "external"]).catch("ask"),
     terminalScrollbackLines: clampedNumber(
       MIN_TERMINAL_SCROLLBACK_LINES,

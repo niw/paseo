@@ -2378,15 +2378,30 @@ export const en = {
       defaultSend: {
         label: "Default send",
         descriptions: {
-          interrupt: "When the agent is running, Enter interrupts. Command/Ctrl+Enter queues.",
+          interrupt: "When the agent is running, {{send}} interrupts. {{alternate}} queues.",
           steer:
-            "When the agent is running, Enter steers the active turn. Command/Ctrl+Enter queues.",
-          queue: "When the agent is running, Enter queues. Command/Ctrl+Enter submits.",
+            "When the agent is running, {{send}} steers the active turn. {{alternate}} queues.",
+          queue: "When the agent is running, {{send}} queues. {{alternate}} submits.",
         },
         options: {
           interrupt: "Interrupt",
           steer: "Steer",
           queue: "Queue",
+        },
+      },
+      sendKey: {
+        label: "Send with",
+        descriptions: {
+          enter: "Enter sends. Shift+Enter adds a new line.",
+          "mod-enter": "Command/Ctrl+Enter sends. Enter adds a new line.",
+        },
+        options: {
+          enter: "Enter",
+          "mod-enter": "Command/Ctrl+Enter",
+        },
+        alternate: {
+          enter: "Command/Ctrl+Enter",
+          "mod-enter": "Command/Ctrl+Shift+Enter",
         },
       },
       serviceUrls: {

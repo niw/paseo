@@ -5,6 +5,7 @@ import {
   resolveActiveSendBehavior,
   resolveComposerSurfacePresentation,
   resolveComposerSurfaceText,
+  resolveEnterKeyAction,
   resolveGlyphRailOffset,
   resolveRetainedSelection,
   runAlternateSendAction,
@@ -360,5 +361,40 @@ describe("fullscreen glyph rail", () => {
     expect(
       resolveGlyphRailOffset({ controlSize: 28, sendIconSize: 20, glyphIconSize: 16 }),
     ).toBeCloseTo(1 / 6);
+  });
+});
+
+describe("resolveEnterKeyAction", () => {
+  const press = (
+    sendKey: "enter" | "mod-enter",
+    modifiers: { shift?: boolean; mod?: boolean; alt?: boolean },
+  ) =>
+    resolveEnterKeyAction({
+      sendKey,
+      shiftKey: modifiers.shift ?? false,
+      modKey: modifiers.mod ?? false,
+      altKey: modifiers.alt ?? false,
+    });
+
+  it("sends on Enter and queues on Command/Ctrl+Enter in enter mode", () => {
+    expect(press("enter", {})).toBe("default-send");
+    expect(press("enter", { shift: true })).toBe("newline");
+    expect(press("enter", { mod: true })).toBe("alternate-send");
+    expect(press("enter", { mod: true, shift: true })).toBe("newline");
+  });
+
+  it("sends on Command/Ctrl+Enter and queues with Shift added in mod-enter mode", () => {
+    expect(press("mod-enter", {})).toBe("newline");
+    expect(press("mod-enter", { shift: true })).toBe("newline");
+    expect(press("mod-enter", { mod: true })).toBe("default-send");
+    expect(press("mod-enter", { mod: true, shift: true })).toBe("alternate-send");
+  });
+
+  it("inserts a newline on Option/Alt+Enter in every mode", () => {
+    for (const sendKey of ["enter", "mod-enter"] as const) {
+      expect(press(sendKey, { alt: true })).toBe("newline");
+      expect(press(sendKey, { alt: true, mod: true })).toBe("newline");
+      expect(press(sendKey, { alt: true, mod: true, shift: true })).toBe("newline");
+    }
   });
 });
