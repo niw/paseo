@@ -515,6 +515,7 @@ export const ja: TranslationResources = {
       copyRelativePath: "相対パスをコピー",
       revealIn: "{{target}}で表示",
       download: "ダウンロード",
+      upload: "ファイルをアップロード",
       addToChat: "チャットに追加",
       moreActions: "その他のアクション",
       newFile: "新規ファイル",
@@ -565,6 +566,7 @@ export const ja: TranslationResources = {
         unavailable: "ワークスペースが利用できません",
         loading: "ファイルを読み込み中...",
       },
+      uploaded: "アップロードしました",
       errors: {
         failedToListDirectory: "ディレクトリの一覧取得に失敗しました",
         createFailed: "エントリの作成に失敗しました",
@@ -572,6 +574,8 @@ export const ja: TranslationResources = {
         duplicateFailed: "エントリの複製に失敗しました",
         revealFailed: "エントリの表示に失敗しました",
         deleteFailed: "エントリの削除に失敗しました",
+        uploadFailed: "ファイルのアップロードに失敗しました",
+        uploadTooLarge: "{{fileName}} は大きすぎます（上限 {{size}}）",
       },
       draft: {
         filePlaceholder: "ファイル名",
