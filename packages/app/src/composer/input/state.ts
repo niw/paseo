@@ -2,8 +2,31 @@ import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
 import type { MessagePayload, TextReplacement } from "@/composer/types";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
+import type { SendKey } from "@/hooks/use-settings/storage";
 
 export type SendBehavior = ActiveTurnBehavior | "queue";
+
+export type EnterKeyAction = "newline" | "default-send" | "alternate-send";
+
+/**
+ * Maps an Enter press to a composer action. Shift is the alternate-send modifier on top of the
+ * send chord in "mod-enter" mode, so Command/Ctrl+Shift+Enter keeps the queue shortcut reachable.
+ * Option/Alt+Enter is a newline in every mode, matching macOS text fields.
+ */
+export function resolveEnterKeyAction(input: {
+  sendKey: SendKey;
+  shiftKey: boolean;
+  modKey: boolean;
+  altKey: boolean;
+}): EnterKeyAction {
+  if (input.altKey) return "newline";
+  if (input.sendKey === "mod-enter") {
+    if (!input.modKey) return "newline";
+    return input.shiftKey ? "alternate-send" : "default-send";
+  }
+  if (input.shiftKey) return "newline";
+  return input.modKey ? "alternate-send" : "default-send";
+}
 
 export function resolveActiveSendBehavior(
   sendBehavior: SendBehavior,

@@ -2290,15 +2290,30 @@ export const ar: TranslationResources = {
         label: "إرسال افتراضي",
         descriptions: {
           interrupt:
-            "عند تشغيل الوكيل، يوقف Enter التشغيل. Command/Ctrl+Enter يضيف إلى قائمة الانتظار.",
+            "عند تشغيل الوكيل، يوقف {{send}} التشغيل. {{alternate}} يضيف إلى قائمة الانتظار.",
           steer:
-            "عند تشغيل الوكيل، يوجّه Enter الجولة النشطة. يضيف Command/Ctrl+Enter إلى قائمة الانتظار.",
-          queue: "عند تشغيل الوكيل، يضيف Enter إلى قائمة الانتظار. Command/Ctrl+Enter يرسل.",
+            "عند تشغيل الوكيل، يوجّه {{send}} الجولة النشطة. يضيف {{alternate}} إلى قائمة الانتظار.",
+          queue: "عند تشغيل الوكيل، يضيف {{send}} إلى قائمة الانتظار. {{alternate}} يرسل.",
         },
         options: {
           interrupt: "مقاطعة",
           steer: "توجيه",
           queue: "طابور",
+        },
+      },
+      sendKey: {
+        label: "الإرسال باستخدام",
+        descriptions: {
+          enter: "يرسل Enter. يضيف Shift+Enter سطرًا جديدًا.",
+          "mod-enter": "يرسل Command/Ctrl+Enter. يضيف Enter سطرًا جديدًا.",
+        },
+        options: {
+          enter: "Enter",
+          "mod-enter": "Command/Ctrl+Enter",
+        },
+        alternate: {
+          enter: "Command/Ctrl+Enter",
+          "mod-enter": "Command/Ctrl+Shift+Enter",
         },
       },
       serviceUrls: {
