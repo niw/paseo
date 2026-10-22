@@ -482,6 +482,7 @@ export const fr: TranslationResources = {
       copyRelativePath: "Copier le chemin relatif",
       revealIn: "Afficher dans {{target}}",
       download: "Télécharger",
+      upload: "Importer des fichiers",
       addToChat: "Ajouter à la conversation",
       moreActions: "Plus d’actions",
       newFile: "Nouveau fichier",
@@ -532,6 +533,7 @@ export const fr: TranslationResources = {
         unavailable: "L’espace de travail est indisponible",
         loading: "Chargement des fichiers…",
       },
+      uploaded: "Importation terminée",
       errors: {
         failedToListDirectory: "Impossible de lister le répertoire",
         createFailed: "Impossible de créer l’élément",
@@ -539,6 +541,8 @@ export const fr: TranslationResources = {
         duplicateFailed: "Impossible de dupliquer l’élément",
         revealFailed: "Impossible d’afficher l’élément",
         deleteFailed: "Impossible de supprimer l’élément",
+        uploadFailed: "Impossible d’importer le fichier",
+        uploadTooLarge: "{{fileName}} est trop volumineux (max. {{size}})",
       },
       draft: {
         filePlaceholder: "Nom du fichier",
