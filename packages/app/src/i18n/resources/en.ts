@@ -1968,6 +1968,7 @@ export const en = {
         alwaysUseFilename: "Always use for {{filename}}",
         option: "{{title}} — {{owner}}",
         builtin: {
+          media: "Media",
           owner: "Paseo",
           markdown: "Markdown",
           html: "HTML",
