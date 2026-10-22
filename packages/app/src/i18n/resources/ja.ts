@@ -1962,6 +1962,7 @@ export const ja: TranslationResources = {
         alwaysUseFilename: "{{filename}} に常に使用",
         option: "{{title}} — {{owner}}",
         builtin: {
+          media: "メディア",
           owner: "Paseo",
           markdown: "Markdown",
           html: "HTML",
