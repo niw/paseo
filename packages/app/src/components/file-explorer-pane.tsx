@@ -6,6 +6,7 @@ import {
   useState,
   type ReactElement,
   type ReactNode,
+  type RefCallback,
   type RefObject,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -68,6 +69,12 @@ import { FileActionsContextMenuContent } from "@/components/file-actions-menu";
 import { ContextMenu, ContextMenuTrigger, useContextMenu } from "@/components/ui/context-menu";
 import { useFileDownload } from "@/hooks/use-file-download";
 import { useFilePicker } from "@/hooks/use-file-picker";
+import type { SelectedFile } from "@/attachments/selected-file";
+import {
+  EXPLORER_DROP_DIRECTORY_DATA_KEY,
+  explorerDropDirectory,
+} from "@/file-explorer/drop-target";
+import { useExplorerFileDrop } from "@/file-explorer/use-explorer-file-drop";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
@@ -118,6 +125,7 @@ interface TreeRowItemProps {
   depth: number;
   isExpanded: boolean;
   isSelected: boolean;
+  isDropTarget: boolean;
   loading: boolean;
   onEntryPress: (entry: ExplorerEntry) => void;
   onSelectEntry: (entry: ExplorerEntry) => void;
@@ -245,6 +253,7 @@ function TreeRowItem({
   depth,
   isExpanded,
   isSelected,
+  isDropTarget,
   loading,
   onEntryPress,
   onSelectEntry,
@@ -288,14 +297,18 @@ function TreeRowItem({
     onSelectEntry(entry);
   }, [entry, onSelectEntry]);
   const accessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
+  const dropDataSet = useMemo(
+    () => ({ [EXPLORER_DROP_DIRECTORY_DATA_KEY]: explorerDropDirectory(entry) }),
+    [entry],
+  );
 
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       workspaceTreeRowStyles.row,
       { paddingLeft: treeRowPaddingLeft(depth) },
-      (Boolean(hovered) || pressed || isSelected) && workspaceTreeRowStyles.active,
+      (Boolean(hovered) || pressed || isSelected || isDropTarget) && workspaceTreeRowStyles.active,
     ],
-    [depth, isSelected],
+    [depth, isDropTarget, isSelected],
   );
 
   const handleCopy = useCallback(() => {
@@ -365,6 +378,7 @@ function TreeRowItem({
         onHoverOut={hideNameHover}
         accessibilityState={accessibilityState}
         aria-selected={isSelected}
+        dataSet={dropDataSet}
         testID={testID}
       >
         <View ref={dragSourceRef} style={styles.entryInfo}>
@@ -693,13 +707,9 @@ export function FileExplorerPane({
     [expandParentDirectory, workspaceStateKey],
   );
 
-  const handleUploadEntries = useCallback(
-    async (parentPath: string) => {
+  const uploadSelectedFiles = useCallback(
+    async (parentPath: string, files: SelectedFile[]) => {
       try {
-        const files = await pickFiles();
-        if (!files) {
-          return;
-        }
         expandParentDirectory(parentPath);
         const outcomes = await uploadFiles({ parentPath, files });
         if (!outcomes) {
@@ -723,8 +733,36 @@ export function FileExplorerPane({
         );
       }
     },
-    [expandParentDirectory, pickFiles, selectExplorerEntry, t, toast, uploadFiles],
+    [expandParentDirectory, selectExplorerEntry, t, toast, uploadFiles],
   );
+
+  const handleUploadEntries = useCallback(
+    async (parentPath: string) => {
+      try {
+        const files = await pickFiles();
+        if (files) {
+          await uploadSelectedFiles(parentPath, files);
+        }
+      } catch (cause) {
+        toast.error(
+          cause instanceof Error ? cause.message : t("workspace.fileExplorer.errors.uploadFailed"),
+        );
+      }
+    },
+    [pickFiles, t, toast, uploadSelectedFiles],
+  );
+
+  const handleDropFiles = useCallback(
+    (parentPath: string, files: SelectedFile[]) => {
+      void uploadSelectedFiles(parentPath, files);
+    },
+    [uploadSelectedFiles],
+  );
+  const explorerFileDrop = useExplorerFileDrop({
+    enabled: fsEntryUploadEnabled,
+    onDrop: handleDropFiles,
+  });
+  const dropTargetDirectory = explorerFileDrop.targetDirectory;
 
   const handleEditCancel = useCallback(() => {
     setPendingEdit(null);
@@ -1037,6 +1075,7 @@ export function FileExplorerPane({
           index={info.index}
           expandedPaths={expandedPaths}
           selectedEntryPath={selectedEntryPath}
+          dropTargetDirectory={dropTargetDirectory}
           isDirectoryLoading={isDirectoryLoading}
           onEntryPress={handleEntryPress}
           onSelectEntry={handleSelectEntry}
@@ -1059,6 +1098,7 @@ export function FileExplorerPane({
       );
     },
     [
+      dropTargetDirectory,
       expandedPaths,
       fsEntryDuplicateEnabled,
       fsEntryOpsEnabled,
@@ -1131,6 +1171,8 @@ export function FileExplorerPane({
         listRows={listRows}
         onNewEntryAtRoot={fsEntryOpsEnabled ? handleNewEntry : undefined}
         onUploadAtRoot={fsEntryUploadEnabled ? handleUploadEntries : undefined}
+        dropTargetRef={explorerFileDrop.ref}
+        isRootDropTarget={dropTargetDirectory === "."}
         currentSortLabel={currentSortLabel}
         isRefreshFetching={isRefreshFetching}
         treeListRef={treeListRef}
@@ -1164,9 +1206,13 @@ function isFileExplorerRowTarget(target: unknown): boolean {
 function RootCreationContextTarget({
   children,
   enabled,
+  dropTargetRef,
+  isDropTarget,
 }: {
   children: ReactNode;
   enabled: boolean;
+  dropTargetRef?: RefCallback<View>;
+  isDropTarget: boolean;
 }) {
   const contextMenu = useContextMenu();
   const handleContextMenu = useCallback(
@@ -1190,7 +1236,8 @@ function RootCreationContextTarget({
   return (
     <View
       {...{ onContextMenu: handleContextMenu }}
-      style={styles.rootContextTarget}
+      ref={dropTargetRef}
+      style={[styles.rootContextTarget, isDropTarget && styles.rootDropTarget]}
       testID="files-empty-area"
     >
       {children}
@@ -1206,6 +1253,8 @@ interface FileExplorerPaneContentProps {
   listRows: ExplorerListRow[];
   onNewEntryAtRoot?: (parentPath: string, kind: "file" | "directory") => void;
   onUploadAtRoot?: (parentPath: string) => void;
+  dropTargetRef?: RefCallback<View>;
+  isRootDropTarget: boolean;
   currentSortLabel: string;
   isRefreshFetching: boolean;
   treeListRef: RefObject<FlatList<ExplorerListRow> | null>;
@@ -1230,6 +1279,8 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
     listRows,
     onNewEntryAtRoot,
     onUploadAtRoot,
+    dropTargetRef,
+    isRootDropTarget,
     currentSortLabel,
     isRefreshFetching,
     treeListRef,
@@ -1400,7 +1451,11 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
         </ToolbarControls>
       </PaneContentToolbar>
       <ContextMenu>
-        <RootCreationContextTarget enabled={Boolean(onNewEntryAtRoot || onUploadAtRoot)}>
+        <RootCreationContextTarget
+          enabled={Boolean(onNewEntryAtRoot || onUploadAtRoot)}
+          dropTargetRef={dropTargetRef}
+          isDropTarget={isRootDropTarget}
+        >
           {listRows.length === 0 ? (
             <View style={styles.centerState}>
               <Text style={styles.emptyText}>{emptyLabel}</Text>
@@ -1533,6 +1588,7 @@ function TreeRowDispatcher({
   index,
   expandedPaths,
   selectedEntryPath,
+  dropTargetDirectory,
   isDirectoryLoading,
   onEntryPress,
   onSelectEntry,
@@ -1558,6 +1614,7 @@ function TreeRowDispatcher({
   index: number;
   expandedPaths: Set<string>;
   selectedEntryPath: string | null;
+  dropTargetDirectory: string | null;
   isDirectoryLoading: (path: string) => boolean;
   onEntryPress: (entry: ExplorerEntry) => void;
   onSelectEntry: (entry: ExplorerEntry) => void;
@@ -1582,6 +1639,7 @@ function TreeRowDispatcher({
   const isDirectory = entry.kind === "directory";
   const isExpanded = isDirectory && expandedPaths.has(entry.path);
   const isSelected = selectedEntryPath === entry.path;
+  const isDropTarget = isDirectory && dropTargetDirectory === entry.path;
   const loading = isDirectory && isDirectoryLoading(entry.path);
 
   return (
@@ -1592,6 +1650,7 @@ function TreeRowDispatcher({
       depth={depth}
       isExpanded={isExpanded}
       isSelected={isSelected}
+      isDropTarget={isDropTarget}
       loading={loading}
       onEntryPress={onEntryPress}
       onSelectEntry={onSelectEntry}
@@ -1808,6 +1867,9 @@ const styles = StyleSheet.create((theme) => ({
   rootContextTarget: {
     flex: 1,
     minHeight: 0,
+  },
+  rootDropTarget: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   centerState: {
     flex: 1,
