@@ -148,7 +148,9 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: node scripts/npm-retry.mjs ci
+        run: |
+          npm install --global npm@12.2.1 --ignore-scripts
+          node scripts/npm-retry.mjs ci
 
       - name: Verify dependency patch recovery
         run: node --test scripts/postinstall-patches.test.mjs
