@@ -2114,6 +2114,7 @@ export const es: TranslationResources = {
         alwaysUseFilename: "Usar siempre para {{filename}}",
         option: "{{title}} — {{owner}}",
         builtin: {
+          media: "Multimedia",
           owner: "Paseo",
           markdown: "Markdown",
           html: "HTML",
