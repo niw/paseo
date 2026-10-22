@@ -47,7 +47,6 @@
     "test:e2e:composer-keyboard:android": "./packages/app/e2e/mobile/composer-keyboard/android.sh",
     "dev:website": "npm run dev --workspace=@getpaseo/website",
     "postinstall": "node scripts/postinstall-patches.mjs",
-    "prepare": "lefthook install --force",
     "build": "npm run build --workspaces --if-present",
     "build:apk": "node scripts/build-apk.mjs",
     "build:apk:arm64": "node scripts/build-apk.mjs arm64",
@@ -157,5 +156,19 @@
     "react-native-gesture-handler": "~2.32.0",
     "react-native-reanimated": "4.5.5",
     "react-native-worklets": "0.10.4"
+  },
+  "packageManager": "npm@12.2.1",
+  "allowScripts": {
+    "@shopify/react-native-skia@2.6.2": true,
+    "dtrace-provider": false,
+    "esbuild@0.25.12 || 0.27.3 || 0.28.1": true,
+    "fsevents": false,
+    "lefthook": false,
+    "msgpackr-extract@3.0.4": true,
+    "node-pty@1.2.0-beta.15": true,
+    "react-native-enriched-markdown@1.2.0-nightly-20261014-766fc0e67": true,
+    "sharp@0.34.5": true,
+    "unrs-resolver@1.11.1": true,
+    "workerd@1.20260507.1 || 1.20260625.1": true
   }
 }
