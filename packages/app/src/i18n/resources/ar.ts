@@ -508,6 +508,7 @@ export const ar: TranslationResources = {
       copyRelativePath: "نسخ المسار النسبي",
       revealIn: "إظهار في {{target}}",
       download: "تحميل",
+      upload: "رفع ملفات",
       addToChat: "إضافة إلى الدردشة",
       moreActions: "المزيد من الإجراءات",
       newFile: "ملف جديد",
@@ -558,6 +559,7 @@ export const ar: TranslationResources = {
         unavailable: "Workspace غير متوفر",
         loading: "جارٍ تحميل الملفات...",
       },
+      uploaded: "اكتمل الرفع",
       errors: {
         failedToListDirectory: "فشل في سرد ​​الدليل",
         createFailed: "فشل إنشاء العنصر",
@@ -565,6 +567,8 @@ export const ar: TranslationResources = {
         duplicateFailed: "فشل تكرار العنصر",
         revealFailed: "فشل إظهار العنصر",
         deleteFailed: "فشل حذف العنصر",
+        uploadFailed: "فشل رفع الملف",
+        uploadTooLarge: "{{fileName}} كبير جدًا (الحد الأقصى {{size}})",
       },
       draft: {
         filePlaceholder: "اسم الملف",

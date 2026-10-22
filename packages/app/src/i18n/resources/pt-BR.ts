@@ -513,6 +513,7 @@ export const ptBR: TranslationResources = {
       copyRelativePath: "Copiar caminho relativo",
       revealIn: "Mostrar no {{target}}",
       download: "Baixar",
+      upload: "Enviar arquivos",
       addToChat: "Adicionar ao chat",
       moreActions: "Mais ações",
       newFile: "Novo arquivo",
@@ -563,6 +564,7 @@ export const ptBR: TranslationResources = {
         unavailable: "Workspace indisponível",
         loading: "Carregando arquivos...",
       },
+      uploaded: "Envio concluído",
       errors: {
         failedToListDirectory: "Falha ao listar diretório",
         createFailed: "Falha ao criar entrada",
@@ -570,6 +572,8 @@ export const ptBR: TranslationResources = {
         duplicateFailed: "Falha ao duplicar entrada",
         revealFailed: "Falha ao mostrar entrada",
         deleteFailed: "Falha ao excluir entrada",
+        uploadFailed: "Falha ao enviar arquivo",
+        uploadTooLarge: "{{fileName}} é grande demais (máx. {{size}})",
       },
       draft: {
         filePlaceholder: "Nome do arquivo",
