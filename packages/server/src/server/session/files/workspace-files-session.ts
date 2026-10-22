@@ -13,6 +13,7 @@ import type {
   FileEntryDeleteRequest,
   FileEntryDuplicateRequest,
   FileEntryRenameRequest,
+  FileEntryUploadRequest,
   FileExplorerRequest,
   FileUploadRequest,
   FileSubscribeRequest,
@@ -383,6 +384,22 @@ export class WorkspaceFilesSession {
       () => cancel?.(),
     );
     cancel = this.fileUploads.beginUpload(request, operation.source, (response) => {
+      if (response) operation.emit(response);
+      void operation
+        .release()
+        .catch((error) => this.logger.error({ err: error }, "Upload cleanup failed"));
+    });
+  }
+
+  handleFileEntryUploadRequest(request: FileEntryUploadRequest, ownership: SessionDelivery): void {
+    let cancel: (() => Promise<void>) | undefined;
+    const operation = ownership.operation(
+      (message) =>
+        message.type === "fs.entry.upload.response" &&
+        message.payload.requestId === request.requestId,
+      () => cancel?.(),
+    );
+    cancel = this.fileUploads.beginEntryUpload(request, operation.source, (response) => {
       if (response) operation.emit(response);
       void operation
         .release()

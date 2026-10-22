@@ -1,43 +1,12 @@
 import { useCallback, useRef } from "react";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
-import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
 import { isWeb } from "@/constants/platform";
 import { getMimeTypeFromPath } from "@/attachments/file-types";
-import { readDesktopFileBytes, type SelectedFile } from "@/attachments/selected-file";
+import type { SelectedFile } from "@/attachments/selected-file";
 
-async function pickFilesWithDesktopDialog(): Promise<SelectedFile[] | null> {
-  const dialog = getDesktopHost()?.dialog;
-  const dialogOpen = dialog?.open;
-  if (typeof dialogOpen !== "function") {
-    throw new Error("Desktop dialog API is not available.");
-  }
-
-  const selection = await dialogOpen({
-    directory: false,
-    multiple: true,
-  });
-
-  if (!selection) {
-    return null;
-  }
-
-  const paths = Array.isArray(selection) ? selection : [selection];
-  if (paths.length === 0) {
-    return null;
-  }
-
-  const result: SelectedFile[] = [];
-
-  for (const filePath of paths) {
-    const fileName = filePath.split("/").pop() ?? filePath.split("\\").pop() ?? filePath;
-    const mimeType = getMimeTypeFromPath(filePath);
-    result.push({ fileName, mimeType, readBytes: () => readDesktopFileBytes(filePath) });
-  }
-
-  return result;
-}
-
+// NOTE: Electron uses the browser input too. It opens the native dialog and hands back `File`
+// objects, so the bytes are read directly instead of through a desktop IPC round trip.
 function pickFilesWithWebInput(): Promise<SelectedFile[] | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
@@ -104,10 +73,6 @@ export function useFilePicker() {
     isPickingRef.current = true;
 
     try {
-      if (isWeb && isElectronRuntime()) {
-        return await pickFilesWithDesktopDialog();
-      }
-
       if (isWeb) {
         return await pickFilesWithWebInput();
       }
