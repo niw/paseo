@@ -2951,6 +2951,17 @@ export const FileUploadRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// NOTE: The file bytes follow as file-transfer binary frames keyed by `requestId`,
+// the same frames `file.upload.request` uses.
+export const FileEntryUploadRequestSchema = z.object({
+  type: z.literal("fs.entry.upload.request"),
+  cwd: z.string(),
+  parentPath: z.string(),
+  name: z.string().min(1),
+  size: z.number().int().nonnegative(),
+  requestId: z.string(),
+});
+
 export const ClearAgentAttentionMessageSchema = z.object({
   type: z.literal("clear_agent_attention"),
   agentId: z.union([z.string(), z.array(z.string())]),
@@ -3457,6 +3468,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ProjectIconGetRequestSchema,
   FileDownloadTokenRequestSchema,
   FileUploadRequestSchema,
+  FileEntryUploadRequestSchema,
   ClearAgentAttentionMessageSchema,
   ClientHeartbeatMessageSchema,
   PingMessageSchema,
@@ -3867,6 +3879,8 @@ export const ServerInfoStatusPayloadSchema = z
         fsEntryOps: z.boolean().optional(),
         // COMPAT(fsEntryDuplicate): added in v0.3.0, remove gate after 2027-02-09.
         fsEntryDuplicate: z.boolean().optional(),
+        // COMPAT(fsEntryUpload): added in v0.13.0, remove gate after 2027-04-21.
+        fsEntryUpload: z.boolean().optional(),
         // COMPAT(checkoutDiscardChanges): added in v0.3.0, remove gate after 2027-02-08.
         checkoutDiscardChanges: z.boolean().optional(),
         checkoutDiffAll: z.boolean().optional(),
@@ -6311,6 +6325,18 @@ export const FileUploadResponseSchema = z.object({
   }),
 });
 
+export const FileEntryUploadResponseSchema = z.object({
+  type: z.literal("fs.entry.upload.response"),
+  payload: z.object({
+    cwd: z.string(),
+    parentPath: z.string(),
+    path: z.string().nullable(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const ListProviderModelsResponseMessageSchema = z.object({
   type: z.literal("list_provider_models_response"),
   payload: z.object({
@@ -7223,6 +7249,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProjectIconGetResponseSchema,
   FileDownloadTokenResponseSchema,
   FileUploadResponseSchema,
+  FileEntryUploadResponseSchema,
   ListProviderModelsResponseMessageSchema,
   ListProviderModesResponseMessageSchema,
   ListProviderFeaturesResponseMessageSchema,
@@ -7682,6 +7709,8 @@ export type FileDownloadTokenRequest = z.infer<typeof FileDownloadTokenRequestSc
 export type FileDownloadTokenResponse = z.infer<typeof FileDownloadTokenResponseSchema>;
 export type FileUploadRequest = z.infer<typeof FileUploadRequestSchema>;
 export type FileUploadResponse = z.infer<typeof FileUploadResponseSchema>;
+export type FileEntryUploadRequest = z.infer<typeof FileEntryUploadRequestSchema>;
+export type FileEntryUploadResponse = z.infer<typeof FileEntryUploadResponseSchema>;
 export type RestartServerRequestMessage = z.infer<typeof RestartServerRequestMessageSchema>;
 export type ShutdownServerRequestMessage = z.infer<typeof ShutdownServerRequestMessageSchema>;
 export type ClearAgentAttentionMessage = z.infer<typeof ClearAgentAttentionMessageSchema>;

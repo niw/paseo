@@ -10,6 +10,8 @@ import {
   FileEntryDuplicateResponseSchema,
   FileEntryRenameRequestSchema,
   FileEntryRenameResponseSchema,
+  FileEntryUploadRequestSchema,
+  FileEntryUploadResponseSchema,
   ServerInfoStatusPayloadSchema,
 } from "./messages.js";
 
@@ -22,6 +24,7 @@ describe("file context action messages", () => {
     });
     expect(legacy.features?.fsEntryOps).toBeUndefined();
     expect(legacy.features?.fsEntryDuplicate).toBeUndefined();
+    expect(legacy.features?.fsEntryUpload).toBeUndefined();
     expect(legacy.features?.checkoutDiscardChanges).toBeUndefined();
 
     const current = ServerInfoStatusPayloadSchema.parse({
@@ -30,12 +33,14 @@ describe("file context action messages", () => {
       features: {
         fsEntryOps: true,
         fsEntryDuplicate: true,
+        fsEntryUpload: true,
         checkoutDiscardChanges: true,
       },
     });
     expect(current.features).toMatchObject({
       fsEntryOps: true,
       fsEntryDuplicate: true,
+      fsEntryUpload: true,
       checkoutDiscardChanges: true,
     });
   });
@@ -121,6 +126,31 @@ describe("file context action messages", () => {
       },
     };
     expect(FileEntryDuplicateResponseSchema.parse(response)).toEqual(response);
+  });
+
+  test("round-trips file entry upload requests and responses", () => {
+    const request = {
+      type: "fs.entry.upload.request",
+      cwd: "/workspace",
+      parentPath: "assets",
+      name: "logo.png",
+      size: 2048,
+      requestId: "upload-1",
+    };
+    expect(FileEntryUploadRequestSchema.parse(request)).toEqual(request);
+
+    const response = {
+      type: "fs.entry.upload.response",
+      payload: {
+        cwd: "/workspace",
+        parentPath: "assets",
+        path: "assets/logo.png",
+        success: true,
+        error: null,
+        requestId: "upload-1",
+      },
+    };
+    expect(FileEntryUploadResponseSchema.parse(response)).toEqual(response);
   });
 
   test("round-trips file entry delete requests and responses", () => {

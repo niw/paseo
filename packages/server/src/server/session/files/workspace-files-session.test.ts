@@ -611,4 +611,67 @@ describe("WorkspaceFilesSession", () => {
     expect(readFileSync(file.path, "utf8")).toBe("hello world");
     await ownership.close();
   });
+
+  test("round-trips a workspace entry upload through transfer frames", async () => {
+    const { subsystem, emitted } = makeSubsystem();
+    const cwd = makeDir("workspace-files-upload-");
+
+    const source = {};
+    const ownership = new SessionDelivery((_source, message) => {
+      emitted.push(message);
+    });
+    ownership.attach(source, true);
+    const request = {
+      type: "fs.entry.upload.request",
+      cwd,
+      parentPath: ".",
+      name: "notes.txt",
+      size: 11,
+      requestId: "req-entry-upload",
+    } as const;
+    await ownership.request(source, request, async () =>
+      subsystem.handleFileEntryUploadRequest(request, ownership),
+    );
+    await subsystem.handleFileTransferFrame(
+      uploadFrame({
+        opcode: FileTransferOpcode.FileBegin,
+        requestId: "req-entry-upload",
+        metadata: {
+          mime: "text/plain",
+          size: 11,
+          encoding: "binary",
+          modifiedAt: "2026-05-02T00:00:00.000Z",
+          fileName: "notes.txt",
+        },
+      }),
+      source,
+    );
+    await subsystem.handleFileTransferFrame(
+      uploadFrame({
+        opcode: FileTransferOpcode.FileChunk,
+        requestId: "req-entry-upload",
+        payload: new TextEncoder().encode("hello world"),
+      }),
+      source,
+    );
+    await subsystem.handleFileTransferFrame(
+      uploadFrame({ opcode: FileTransferOpcode.FileEnd, requestId: "req-entry-upload" }),
+      source,
+    );
+
+    const message = emitted.find((entry) => entry.type === "fs.entry.upload.response");
+    expect(message).toEqual({
+      type: "fs.entry.upload.response",
+      payload: {
+        cwd,
+        parentPath: ".",
+        path: "notes.txt",
+        success: true,
+        error: null,
+        requestId: "req-entry-upload",
+      },
+    });
+    expect(readFileSync(join(cwd, "notes.txt"), "utf8")).toBe("hello world");
+    await ownership.close();
+  });
 });
