@@ -474,6 +474,7 @@ export const en = {
       copyRelativePath: "Copy relative path",
       revealIn: "Reveal in {{target}}",
       download: "Download",
+      upload: "Upload files",
       addToChat: "Add to chat",
       moreActions: "More actions",
       newFile: "New file",
@@ -524,6 +525,7 @@ export const en = {
         unavailable: "Workspace is unavailable",
         loading: "Loading files...",
       },
+      uploaded: "Upload complete",
       errors: {
         failedToListDirectory: "Failed to list directory",
         createFailed: "Failed to create entry",
@@ -531,6 +533,8 @@ export const en = {
         duplicateFailed: "Failed to duplicate entry",
         revealFailed: "Failed to reveal entry",
         deleteFailed: "Failed to delete entry",
+        uploadFailed: "Failed to upload file",
+        uploadTooLarge: "{{fileName}} is too large (max {{size}})",
       },
       draft: {
         filePlaceholder: "File name",
