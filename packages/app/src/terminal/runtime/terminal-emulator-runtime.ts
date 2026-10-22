@@ -473,7 +473,7 @@ export class TerminalEmulatorRuntime {
       allowProposedApi: true,
       convertEol: false,
       cursorBlink: true,
-      cursorStyle: "bar",
+      cursorStyle: "block",
       fontFamily: resolveTerminalFontFamily(input.fontFamily),
       fontSize: resolveTerminalFontSize(input.fontSize),
       // OSC 8 hyperlinks; without a handler xterm prompts and calls window.open().
