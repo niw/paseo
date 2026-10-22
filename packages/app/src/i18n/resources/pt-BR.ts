@@ -2193,6 +2193,7 @@ export const ptBR: TranslationResources = {
         alwaysUseFilename: "Sempre usar para {{filename}}",
         option: "{{title}} — {{owner}}",
         builtin: {
+          media: "Mídia",
           owner: "Paseo",
           markdown: "Markdown",
           html: "HTML",
