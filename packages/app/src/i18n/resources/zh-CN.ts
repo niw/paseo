@@ -474,6 +474,7 @@ export const zhCN: TranslationResources = {
       copyRelativePath: "复制相对路径",
       revealIn: "在 {{target}} 中显示",
       download: "下载",
+      upload: "上传文件",
       addToChat: "添加到聊天",
       moreActions: "更多操作",
       newFile: "新建文件",
@@ -524,6 +525,7 @@ export const zhCN: TranslationResources = {
         unavailable: "Workspace 不可用",
         loading: "正在加载文件...",
       },
+      uploaded: "上传完成",
       errors: {
         failedToListDirectory: "列出目录失败",
         createFailed: "创建条目失败",
@@ -531,6 +533,8 @@ export const zhCN: TranslationResources = {
         duplicateFailed: "复制条目失败",
         revealFailed: "显示条目失败",
         deleteFailed: "删除条目失败",
+        uploadFailed: "上传文件失败",
+        uploadTooLarge: "{{fileName}} 过大（上限 {{size}}）",
       },
       draft: {
         filePlaceholder: "文件名",
