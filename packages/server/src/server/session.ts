@@ -3008,6 +3008,9 @@ export class Session {
       case "file.upload.request":
         this.workspaceFilesSession.handleFileUploadRequest(msg, this.delivery);
         return undefined;
+      case "fs.entry.upload.request":
+        this.workspaceFilesSession.handleFileEntryUploadRequest(msg, this.delivery);
+        return undefined;
       default:
         return undefined;
     }
