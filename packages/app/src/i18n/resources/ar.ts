@@ -1953,6 +1953,7 @@ export const ar: TranslationResources = {
         alwaysUseFilename: "استخدام دائمًا لـ {{filename}}",
         option: "{{title}} — {{owner}}",
         builtin: {
+          media: "وسائط",
           owner: "Paseo",
           markdown: "Markdown",
           html: "HTML",

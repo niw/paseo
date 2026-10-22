@@ -1,3 +1,4 @@
+import { MAX_MEDIA_PREVIEW_BYTES, mediaTypeForPath } from "@/file-pane/media";
 import type { DaemonClient, FileReadResult } from "@getpaseo/client/internal/daemon-client";
 import type { FileVersion } from "@getpaseo/protocol/messages";
 import {
@@ -57,7 +58,12 @@ export function createDaemonFileSession(
       };
     },
     async read(target) {
-      return client.readFile(target.cwd, target.path);
+      return client.readFile(
+        target.cwd,
+        target.path,
+        undefined,
+        mediaTypeForPath(target.path) ? MAX_MEDIA_PREVIEW_BYTES : undefined,
+      );
     },
     async write({ target, content, ...expected }) {
       if (!features.workspaceFileEditing) throw new Error("Update the host to edit files.");
@@ -73,6 +79,7 @@ export function createDaemonFileSession(
       });
     },
     async createUrl({ target, bytes, mimeType }) {
+      mimeType = mediaTypeForPath(target.path)?.mimeType ?? mimeType;
       const attachment = await persistAttachmentFromBytes({
         id: createPreviewAttachmentId({
           mimeType,
