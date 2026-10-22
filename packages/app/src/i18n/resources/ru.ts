@@ -479,6 +479,7 @@ export const ru: TranslationResources = {
       copyRelativePath: "Копировать относительный путь",
       revealIn: "Показать в {{target}}",
       download: "Скачать",
+      upload: "Загрузить файлы",
       addToChat: "Добавить в чат",
       moreActions: "Дополнительные действия",
       newFile: "Новый файл",
@@ -529,6 +530,7 @@ export const ru: TranslationResources = {
         unavailable: "Рабочее пространство недоступно",
         loading: "Загрузка файлов...",
       },
+      uploaded: "Загрузка завершена",
       errors: {
         failedToListDirectory: "Не удалось получить содержимое каталога",
         createFailed: "Не удалось создать элемент",
@@ -536,6 +538,8 @@ export const ru: TranslationResources = {
         duplicateFailed: "Не удалось создать копию элемента",
         revealFailed: "Не удалось показать расположение элемента",
         deleteFailed: "Не удалось удалить элемент",
+        uploadFailed: "Не удалось загрузить файл",
+        uploadTooLarge: "{{fileName}} слишком большой (макс. {{size}})",
       },
       draft: {
         filePlaceholder: "Имя файла",

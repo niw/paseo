@@ -27,7 +27,15 @@ import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles"
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import * as Clipboard from "expo-clipboard";
-import { ChevronDown, Eye, EyeOff, FilePlus, FolderPlus, RotateCw } from "lucide-react-native";
+import {
+  ChevronDown,
+  Eye,
+  EyeOff,
+  FilePlus,
+  FolderPlus,
+  RotateCw,
+  Upload,
+} from "lucide-react-native";
 import { MaterialFileIcon } from "@/components/material-file-icon";
 import {
   TreeChevron,
@@ -59,6 +67,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { FileActionsContextMenuContent } from "@/components/file-actions-menu";
 import { ContextMenu, ContextMenuTrigger, useContextMenu } from "@/components/ui/context-menu";
 import { useFileDownload } from "@/hooks/use-file-download";
+import { useFilePicker } from "@/hooks/use-file-picker";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
@@ -122,6 +131,7 @@ interface TreeRowItemProps {
   onAddToChat?: (path: string) => void;
   onOpenFileToSide?: (path: string) => void;
   onNewEntry?: (parentPath: string, kind: "file" | "directory") => void;
+  onUploadEntries?: (parentPath: string) => void;
   onCollapseDirectory?: (path: string) => void;
   onRenameEntry?: (entry: ExplorerEntry) => void;
   onDuplicateEntry?: (entry: ExplorerEntry) => void;
@@ -248,6 +258,7 @@ function TreeRowItem({
   onAddToChat,
   onOpenFileToSide,
   onNewEntry,
+  onUploadEntries,
   onCollapseDirectory,
   onRenameEntry,
   onDuplicateEntry,
@@ -323,6 +334,10 @@ function TreeRowItem({
     onNewEntry?.(entry.path, "directory");
   }, [onNewEntry, entry.path]);
 
+  const handleUpload = useCallback(() => {
+    onUploadEntries?.(entry.path);
+  }, [onUploadEntries, entry.path]);
+
   const handleCollapseDirectory = useCallback(() => {
     onCollapseDirectory?.(entry.path);
   }, [entry.path, onCollapseDirectory]);
@@ -386,6 +401,7 @@ function TreeRowItem({
         onOpenToSide={!isDirectory && onOpenFileToSide ? handleOpenToSide : undefined}
         onNewFile={onNewEntry ? handleNewFile : undefined}
         onNewFolder={onNewEntry ? handleNewFolder : undefined}
+        onUpload={isDirectory && onUploadEntries ? handleUpload : undefined}
         onCollapseFolder={isDirectory && isExpanded ? handleCollapseDirectory : undefined}
         onRename={onRenameEntry ? handleRename : undefined}
         onDuplicate={onDuplicateEntry ? handleDuplicate : undefined}
@@ -435,6 +451,7 @@ export function FileExplorerPane({
   const {
     requestDirectoryListing,
     createEntry,
+    uploadFiles,
     renameEntry,
     duplicateEntry,
     deleteEntry,
@@ -462,6 +479,11 @@ export function FileExplorerPane({
   const fsEntryDuplicateEnabled = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryDuplicate === true,
   );
+  // COMPAT(fsEntryUpload): added in v0.13.0, remove gate after 2027-04-21.
+  const fsEntryUploadEnabled = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryUpload === true,
+  );
+  const { pickFiles } = useFilePicker();
   const [pendingEdit, setPendingEdit] = useState<ExplorerPendingEdit | null>(null);
   const downloadFile = useFileDownload({
     serverId,
@@ -638,29 +660,70 @@ export function FileExplorerPane({
     [downloadFile],
   );
 
+  const expandParentDirectory = useCallback(
+    (parentPath: string) => {
+      if (!workspaceStateKey || parentPath === ".") {
+        return;
+      }
+      setExpandedPathsForWorkspace(workspaceStateKey, (currentPaths) =>
+        setExpandedDirectoryPath({
+          currentExpandedPaths: currentPaths,
+          directoryPath: parentPath,
+          expanded: true,
+        }),
+      );
+      if (!directories.has(parentPath)) {
+        void requestDirectoryListing(parentPath, {
+          recordHistory: false,
+          setCurrentPath: false,
+        });
+      }
+    },
+    [directories, requestDirectoryListing, setExpandedPathsForWorkspace, workspaceStateKey],
+  );
+
   const handleNewEntry = useCallback(
     (parentPath: string, kind: "file" | "directory") => {
       if (!workspaceStateKey) {
         return;
       }
-      if (parentPath !== ".") {
-        setExpandedPathsForWorkspace(workspaceStateKey, (currentPaths) =>
-          setExpandedDirectoryPath({
-            currentExpandedPaths: currentPaths,
-            directoryPath: parentPath,
-            expanded: true,
-          }),
-        );
-        if (!directories.has(parentPath)) {
-          void requestDirectoryListing(parentPath, {
-            recordHistory: false,
-            setCurrentPath: false,
-          });
-        }
-      }
+      expandParentDirectory(parentPath);
       setPendingEdit({ type: "create", parentPath, kind });
     },
-    [directories, requestDirectoryListing, setExpandedPathsForWorkspace, workspaceStateKey],
+    [expandParentDirectory, workspaceStateKey],
+  );
+
+  const handleUploadEntries = useCallback(
+    async (parentPath: string) => {
+      try {
+        const files = await pickFiles();
+        if (!files) {
+          return;
+        }
+        expandParentDirectory(parentPath);
+        const outcomes = await uploadFiles({ parentPath, files });
+        if (!outcomes) {
+          return;
+        }
+        const failures = outcomes.flatMap((outcome) =>
+          outcome.status === "failed" ? [outcome.error] : [],
+        );
+        const lastUploaded = outcomes.findLast((outcome) => outcome.status === "uploaded");
+        if (lastUploaded?.status === "uploaded") {
+          selectExplorerEntry(lastUploaded.path);
+        }
+        if (failures.length > 0) {
+          toast.error(failures.join("\n"));
+          return;
+        }
+        toast.show(t("workspace.fileExplorer.uploaded"), { variant: "success" });
+      } catch (cause) {
+        toast.error(
+          cause instanceof Error ? cause.message : t("workspace.fileExplorer.errors.uploadFailed"),
+        );
+      }
+    },
+    [expandParentDirectory, pickFiles, selectExplorerEntry, t, toast, uploadFiles],
   );
 
   const handleEditCancel = useCallback(() => {
@@ -987,6 +1050,7 @@ export function FileExplorerPane({
           onAddToChat={onAddToChat}
           onOpenFileToSide={onOpenFileToSide}
           onNewEntry={fsEntryOpsEnabled ? handleNewEntry : undefined}
+          onUploadEntries={fsEntryUploadEnabled ? handleUploadEntries : undefined}
           onCollapseDirectory={handleCollapseDirectory}
           onRenameEntry={fsEntryOpsEnabled ? handleRenameEntry : undefined}
           onDuplicateEntry={fsEntryDuplicateEnabled ? handleDuplicateEntry : undefined}
@@ -998,6 +1062,7 @@ export function FileExplorerPane({
       expandedPaths,
       fsEntryDuplicateEnabled,
       fsEntryOpsEnabled,
+      fsEntryUploadEnabled,
       handleCollapseDirectory,
       handleCopyPath,
       handleCopyRelativePath,
@@ -1013,6 +1078,7 @@ export function FileExplorerPane({
       handleRenameEntry,
       handleRevealEntry,
       handleSelectEntry,
+      handleUploadEntries,
       isDirectoryLoading,
       fileManagerTarget,
       openDirectoryInEditor,
@@ -1064,6 +1130,7 @@ export function FileExplorerPane({
         showBackFromError={showBackFromError}
         listRows={listRows}
         onNewEntryAtRoot={fsEntryOpsEnabled ? handleNewEntry : undefined}
+        onUploadAtRoot={fsEntryUploadEnabled ? handleUploadEntries : undefined}
         currentSortLabel={currentSortLabel}
         isRefreshFetching={isRefreshFetching}
         treeListRef={treeListRef}
@@ -1138,6 +1205,7 @@ interface FileExplorerPaneContentProps {
   showBackFromError: boolean;
   listRows: ExplorerListRow[];
   onNewEntryAtRoot?: (parentPath: string, kind: "file" | "directory") => void;
+  onUploadAtRoot?: (parentPath: string) => void;
   currentSortLabel: string;
   isRefreshFetching: boolean;
   treeListRef: RefObject<FlatList<ExplorerListRow> | null>;
@@ -1161,6 +1229,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
     showBackFromError,
     listRows,
     onNewEntryAtRoot,
+    onUploadAtRoot,
     currentSortLabel,
     isRefreshFetching,
     treeListRef,
@@ -1182,6 +1251,9 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
   const handleNewFolderAtRoot = useCallback(() => {
     onNewEntryAtRoot?.(".", "directory");
   }, [onNewEntryAtRoot]);
+  const handleUploadAtRoot = useCallback(() => {
+    onUploadAtRoot?.(".");
+  }, [onUploadAtRoot]);
 
   const hiddenFilesToggleAccessibilityLabel = showHiddenFiles
     ? t("workspace.fileExplorer.actions.hideHiddenFiles")
@@ -1265,6 +1337,20 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
               </ToolbarButton>
             </>
           ) : null}
+          {onUploadAtRoot ? (
+            <ToolbarButton
+              label={t("workspace.fileActions.upload")}
+              compact={isCompact}
+              hitSlop={8}
+              testID="files-upload"
+              onPress={handleUploadAtRoot}
+            >
+              <Upload
+                size={paneContentToolbarIconSize(isCompact)}
+                color={theme.colors.foregroundExtraMuted}
+              />
+            </ToolbarButton>
+          ) : null}
           <ToolbarButton
             label={hiddenFilesToggleAccessibilityLabel}
             selected={!showHiddenFiles}
@@ -1314,7 +1400,7 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
         </ToolbarControls>
       </PaneContentToolbar>
       <ContextMenu>
-        <RootCreationContextTarget enabled={Boolean(onNewEntryAtRoot)}>
+        <RootCreationContextTarget enabled={Boolean(onNewEntryAtRoot || onUploadAtRoot)}>
           {listRows.length === 0 ? (
             <View style={styles.centerState}>
               <Text style={styles.emptyText}>{emptyLabel}</Text>
@@ -1340,11 +1426,12 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
           )}
           {listRows.length > 0 ? scrollbar.overlay : null}
         </RootCreationContextTarget>
-        {onNewEntryAtRoot ? (
+        {onNewEntryAtRoot || onUploadAtRoot ? (
           <FileActionsContextMenuContent
             fileKind="directory"
-            onNewFile={handleNewFileAtRoot}
-            onNewFolder={handleNewFolderAtRoot}
+            onNewFile={onNewEntryAtRoot ? handleNewFileAtRoot : undefined}
+            onNewFolder={onNewEntryAtRoot ? handleNewFolderAtRoot : undefined}
+            onUpload={onUploadAtRoot ? handleUploadAtRoot : undefined}
             testIDPrefix="files-empty-area"
           />
         ) : null}
@@ -1459,6 +1546,7 @@ function TreeRowDispatcher({
   onAddToChat,
   onOpenFileToSide,
   onNewEntry,
+  onUploadEntries,
   onCollapseDirectory,
   onRenameEntry,
   onDuplicateEntry,
@@ -1483,6 +1571,7 @@ function TreeRowDispatcher({
   onAddToChat?: (path: string) => void;
   onOpenFileToSide?: (path: string) => void;
   onNewEntry?: (parentPath: string, kind: "file" | "directory") => void;
+  onUploadEntries?: (parentPath: string) => void;
   onCollapseDirectory?: (path: string) => void;
   onRenameEntry?: (entry: ExplorerEntry) => void;
   onDuplicateEntry?: (entry: ExplorerEntry) => void;
@@ -1516,6 +1605,7 @@ function TreeRowDispatcher({
       onAddToChat={onAddToChat}
       onOpenFileToSide={onOpenFileToSide}
       onNewEntry={onNewEntry}
+      onUploadEntries={onUploadEntries}
       onCollapseDirectory={onCollapseDirectory}
       onRenameEntry={onRenameEntry}
       onDuplicateEntry={onDuplicateEntry}

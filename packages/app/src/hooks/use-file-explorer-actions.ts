@@ -8,6 +8,8 @@ import {
 import { usePanelStore } from "@/stores/panel-store";
 import { revealExplorerDirectory } from "@/file-explorer/tree";
 import { parentExplorerPath } from "@/utils/explorer-paths";
+import type { SelectedFile } from "@/attachments/selected-file";
+import { uploadExplorerFiles } from "@/file-explorer/upload";
 
 function createExplorerState(): AgentFileExplorerState {
   return {
@@ -244,6 +246,27 @@ export function useFileExplorerActions(params: { serverId: string } & FileExplor
     [client, normalizedWorkspaceRoot, requestDirectoryListing],
   );
 
+  const uploadFiles = useCallback(
+    async (input: { parentPath: string; files: SelectedFile[] }) => {
+      if (!client || !normalizedWorkspaceRoot) {
+        return null;
+      }
+      const outcomes = await uploadExplorerFiles({
+        client,
+        cwd: normalizedWorkspaceRoot,
+        ...input,
+      });
+      if (outcomes.some((outcome) => outcome.status === "uploaded")) {
+        await requestDirectoryListing(input.parentPath, {
+          recordHistory: false,
+          setCurrentPath: false,
+        });
+      }
+      return outcomes;
+    },
+    [client, normalizedWorkspaceRoot, requestDirectoryListing],
+  );
+
   const renameEntry = useCallback(
     async (input: { path: string; name: string }) => {
       if (!client || !normalizedWorkspaceRoot) {
@@ -315,6 +338,7 @@ export function useFileExplorerActions(params: { serverId: string } & FileExplor
     requestFileDownloadToken,
     requestFileBytes,
     createEntry,
+    uploadFiles,
     renameEntry,
     duplicateEntry,
     deleteEntry,
