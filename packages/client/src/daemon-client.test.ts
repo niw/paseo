@@ -3206,6 +3206,81 @@ test("uploadFile sends metadata request and file bytes as binary chunks", async 
   });
 });
 
+test("uploadFileEntry sends the workspace destination and file bytes as binary chunks", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const responsePromise = client.uploadFileEntry({
+    cwd: "/workspace",
+    parentPath: "assets",
+    name: "logo.png",
+    bytes: new Uint8Array([0, 255, 1]),
+    requestId: "req-entry-upload",
+    chunkSize: 2,
+  });
+
+  await vi.waitFor(() => {
+    const frames = mock.sent.slice(1).map(assertUint8Array).map(decodeFileTransferFrame);
+    expect(frames.at(-1)?.opcode).toBe(FileTransferOpcode.FileEnd);
+  });
+
+  expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
+    type: "session",
+    message: {
+      type: "fs.entry.upload.request",
+      cwd: "/workspace",
+      parentPath: "assets",
+      name: "logo.png",
+      size: 3,
+      requestId: "req-entry-upload",
+    },
+  });
+  const frames = mock.sent.slice(1).map(assertUint8Array).map(decodeFileTransferFrame);
+  expect(frames.map((frame) => frame.opcode)).toEqual([
+    FileTransferOpcode.FileBegin,
+    FileTransferOpcode.FileChunk,
+    FileTransferOpcode.FileChunk,
+    FileTransferOpcode.FileEnd,
+  ]);
+  expect(frames.filter((frame) => frame.opcode === FileTransferOpcode.FileChunk)).toEqual([
+    {
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "req-entry-upload",
+      payload: new Uint8Array([0, 255]),
+    },
+    {
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "req-entry-upload",
+      payload: new Uint8Array([1]),
+    },
+  ]);
+
+  const payload = {
+    cwd: "/workspace",
+    parentPath: "assets",
+    path: "assets/logo.png",
+    success: true,
+    error: null,
+    requestId: "req-entry-upload",
+  };
+  mock.triggerMessage(wrapSessionMessage({ type: "fs.entry.upload.response", payload }));
+
+  await expect(responsePromise).resolves.toEqual(payload);
+});
+
 test("normalizes workspace_setup_progress into a workspace-scoped daemon event", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
