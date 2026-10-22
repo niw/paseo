@@ -2,6 +2,7 @@ import { useWorkspace, useFileUrl, type PluginFilePanelProps } from "@getpaseo/p
 import { useCallback, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { MediaPreview } from "@/file-pane/media-preview";
 import { ZoomableImage } from "@/components/zoomable-viewport/image";
 import { useSessionStore } from "@/stores/session-store";
 import { FileHtmlPreview } from "./html-preview";
@@ -65,6 +66,13 @@ function ImagePanel({ file }: PluginFilePanelProps) {
   return <ZoomableImage uri={url.url} testID="image-file-preview" />;
 }
 
+function MediaPanel({ file }: PluginFilePanelProps) {
+  const url = useFileUrl(file);
+  if (url.status === "loading") return <FilePanelLoading />;
+  if (url.status === "error") return <FilePanelError message={url.error.message} />;
+  return <MediaPreview uri={url.url} testID="media-file-preview" />;
+}
+
 function FilePanelError({ message }: { message: string }) {
   return (
     <View style={styles.centerState}>
@@ -74,6 +82,7 @@ function FilePanelError({ message }: { message: string }) {
 }
 
 const components = {
+  "builtin:media": MediaPanel,
   "builtin:markdown": MarkdownPanel,
   "builtin:html": HtmlPanel,
   "builtin:image": ImagePanel,
