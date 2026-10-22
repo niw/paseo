@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { LiveFileModel, type LiveFileSession } from "./model";
 import { SOURCE_PRESENTATION_BUDGETS } from "../source/presentation";
 import { isWeb } from "@/constants/platform";
+import { MAX_MEDIA_PREVIEW_BYTES, mediaTypeForPath } from "../media";
 
 export function useLiveFile(input: {
   client: DaemonClient | null;
@@ -24,7 +25,9 @@ export function useLiveFile(input: {
           target.cwd,
           target.path,
           undefined,
-          SOURCE_PRESENTATION_BUDGETS[isWeb ? "web" : "native"].plain,
+          mediaTypeForPath(target.path)
+            ? MAX_MEDIA_PREVIEW_BYTES
+            : SOURCE_PRESENTATION_BUDGETS[isWeb ? "web" : "native"].plain,
         );
       },
     };

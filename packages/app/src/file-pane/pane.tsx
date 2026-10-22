@@ -40,6 +40,8 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { usePublishPanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 import type { Theme } from "@/styles/theme";
 import { ZoomableImage } from "@/components/zoomable-viewport/image";
+import { mediaTypeForPath } from "./media";
+import { MediaPreview } from "./media-preview";
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -53,7 +55,7 @@ interface FilePreviewBodyProps {
   isMobile: boolean;
   location: WorkspaceFileLocation;
   navigationRevision: number;
-  imagePreviewUri: string | null;
+  previewUri: string | null;
   workspaceRoot: string;
   client: DaemonClient | null;
   serverId: string;
@@ -137,7 +139,7 @@ function FilePreviewBody({
   isMobile: _isMobile,
   location,
   navigationRevision,
-  imagePreviewUri,
+  previewUri,
   workspaceRoot,
   client,
   serverId,
@@ -211,7 +213,7 @@ function FilePreviewBody({
   }
 
   if (preview.kind === "image") {
-    if (!imagePreviewUri) {
+    if (!previewUri) {
       return (
         <View style={styles.centerState}>
           <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
@@ -220,7 +222,20 @@ function FilePreviewBody({
       );
     }
 
-    return <ZoomableImage uri={imagePreviewUri} testID="image-file-preview" />;
+    return <ZoomableImage uri={previewUri} testID="image-file-preview" />;
+  }
+
+  if (mediaTypeForPath(filePath)) {
+    if (!previewUri) {
+      return (
+        <View style={styles.centerState}>
+          <ThemedLoadingSpinner size="small" uniProps={foregroundMutedColorMapping} />
+          <Text style={styles.loadingText}>{t("panels.file.loading")}</Text>
+        </View>
+      );
+    }
+
+    return <MediaPreview uri={previewUri} testID="media-file-preview" />;
   }
 
   return (
@@ -290,8 +305,8 @@ export function FilePane({
 
   useEffect(() => setPreviewMode("preview"), [targetKey]);
 
-  const { file: preview, imageAttachment } = resolveFilePreviewLifecycle(previewLifecycle);
-  const imagePreviewUri = useAttachmentPreviewUrl(imageAttachment);
+  const { file: preview, previewAttachment } = resolveFilePreviewLifecycle(previewLifecycle);
+  const previewUri = useAttachmentPreviewUrl(previewAttachment);
   const isRenderable = isRenderablePreview(preview, location.path);
   const editable = isEditableTextFile({
     preview,
@@ -328,7 +343,7 @@ export function FilePane({
       isMobile={isMobile}
       location={location}
       navigationRevision={navigationRevision}
-      imagePreviewUri={imagePreviewUri}
+      previewUri={previewUri}
     />
   );
 }
@@ -370,7 +385,7 @@ function FilePanePresentation({
   isMobile,
   location,
   navigationRevision,
-  imagePreviewUri,
+  previewUri,
 }: {
   serverId: string;
   workspaceRoot: string;
@@ -392,7 +407,7 @@ function FilePanePresentation({
   isMobile: boolean;
   location: WorkspaceFileLocation;
   navigationRevision: number;
-  imagePreviewUri: string | null;
+  previewUri: string | null;
 }) {
   if (!client && readTarget) {
     return (
@@ -465,7 +480,7 @@ function FilePanePresentation({
         isMobile={isMobile}
         location={location}
         navigationRevision={navigationRevision}
-        imagePreviewUri={imagePreviewUri}
+        previewUri={previewUri}
         workspaceRoot={workspaceRoot}
         client={client}
         serverId={serverId}
@@ -645,7 +660,7 @@ function EditableFilePane({
           isMobile={isMobile}
           location={location}
           navigationRevision={navigationRevision}
-          imagePreviewUri={null}
+          previewUri={null}
           workspaceRoot={workspaceRoot}
           client={client}
           serverId={serverId}
