@@ -1,3 +1,4 @@
+import { MEDIA_EXTENSIONS } from "@/file-pane/media";
 import type { FilePanelCandidate } from "./resolve";
 
 const renderingPanels = [
@@ -18,6 +19,12 @@ const renderingPanels = [
     builtin: true,
     files: { extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg"] },
     fileKind: "image",
+  },
+  {
+    id: "builtin:media",
+    builtin: true,
+    files: { extensions: MEDIA_EXTENSIONS },
+    fileKind: "binary",
   },
 ] as const satisfies readonly FilePanelCandidate[];
 

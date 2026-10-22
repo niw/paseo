@@ -1984,6 +1984,7 @@ export const ru: TranslationResources = {
         alwaysUseFilename: "Всегда использовать для {{filename}}",
         option: "{{title}} — {{owner}}",
         builtin: {
+          media: "Медиа",
           owner: "Paseo",
           markdown: "Markdown",
           html: "HTML",
