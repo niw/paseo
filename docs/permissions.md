@@ -54,6 +54,14 @@ A delegating principal can grant only authority it already possesses. A session 
 
 Workspace-scoped grants require every resource-bearing operation and outbound observation to enforce the same workspace boundary. File preview currently accepts any daemon-readable regular file, so it must gain resource enforcement before workspace-specific access ships.
 
+## External MCP callers
+
+Agents outside the machine reach the Agent MCP tools through a separate listener (`packages/server/src/server/external-mcp/`). Cloudflare Access authenticates them; the daemon verifies the Access JWT and maps its `email` or `common_name` claim to a principal listed in `daemon.mcp.external.principals`. Those principals live in config, not in a credential store, because Access already owns sign-in and revocation.
+
+Tools are classified against the same permissions as RPCs in `external-mcp/tool-permissions.ts`. The table is keyed by the full tool catalog, so a new tool fails typecheck until it is classified.
+
+Keep the listener separate from the main port. cloudflared connects over loopback, so on the main port a tunneled request is indistinguishable from a local agent and falls through to the password, capability-token and `callerAgentId` paths. External callers are always top-level: the listener rejects `callerAgentId`.
+
 ## Hub
 
 The Hub authenticates as a service principal. Its locally selected grants decide whether it may execute agents, manage the daemon, manage tunnels, or manage access.

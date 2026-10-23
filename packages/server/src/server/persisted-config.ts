@@ -14,6 +14,7 @@ import { AgentProfileSchema, AgentSkillSelectionSchema } from "@getpaseo/protoco
 import { PluginIdSchema, PluginSourceSchema } from "@getpaseo/protocol/plugin-config";
 import { TerminalProfileSchema } from "@getpaseo/protocol/terminal-profile";
 import { PaseoServicePortAllocationSchema } from "@getpaseo/protocol/paseo-config-schema";
+import { DaemonPermissionSchema } from "@getpaseo/protocol/messages";
 
 export const LogLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
 export const LogFormatSchema = z.enum(["pretty", "json"]);
@@ -92,6 +93,55 @@ const BcryptHashSchema = z.string().regex(/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/
 const DaemonAuthSchema = z
   .object({
     password: BcryptHashSchema.optional(),
+  })
+  .strict();
+
+const ExternalMcpPrincipalSchema = z.union([
+  z
+    .object({
+      email: z.string().trim().min(1).describe("Matches the Access JWT email claim."),
+      permissions: z.array(DaemonPermissionSchema),
+    })
+    .strict(),
+  z
+    .object({
+      commonName: z
+        .string()
+        .trim()
+        .min(1)
+        .describe("Matches the Access JWT common_name claim (service token client ID)."),
+      permissions: z.array(DaemonPermissionSchema),
+    })
+    .strict(),
+]);
+
+export type PersistedExternalMcpPrincipal = z.infer<typeof ExternalMcpPrincipalSchema>;
+
+const ExternalMcpSchema = z
+  .object({
+    enabled: z
+      .boolean()
+      .optional()
+      .describe("Serve the Agent MCP tools on a separate listener for external agents."),
+    listen: z
+      .string()
+      .optional()
+      .describe("Listener address for external agents. Required when enabled."),
+    cloudflareAccess: z
+      .object({
+        teamDomain: z
+          .string()
+          .trim()
+          .min(1)
+          .describe("Cloudflare Access team domain, for example example.cloudflareaccess.com."),
+        aud: z
+          .array(z.string().trim().min(1))
+          .min(1)
+          .describe("Accepted Access application audience tags."),
+      })
+      .strict()
+      .optional(),
+    principals: z.array(ExternalMcpPrincipalSchema).optional(),
   })
   .strict();
 
@@ -248,6 +298,7 @@ export const PersistedConfigSchema = z
           .object({
             enabled: z.boolean().optional(),
             injectIntoAgents: z.boolean().optional(),
+            external: ExternalMcpSchema.optional(),
           })
           .passthrough()
           .optional(),

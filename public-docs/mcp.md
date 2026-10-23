@@ -12,10 +12,11 @@ category: Orchestration
 
 ## Configuration
 
-| Setting                       | Default | Purpose                                            |
-| ----------------------------- | ------- | -------------------------------------------------- |
-| `daemon.mcp.enabled`          | `true`  | Run the MCP server.                                |
-| `daemon.mcp.injectIntoAgents` | `false` | Give agents launched by Paseo access to its tools. |
+| Setting                       | Default | Purpose                                                                                                         |
+| ----------------------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
+| `daemon.mcp.enabled`          | `true`  | Run the MCP server.                                                                                             |
+| `daemon.mcp.injectIntoAgents` | `false` | Give agents launched by Paseo access to its tools.                                                              |
+| `daemon.mcp.external.enabled` | `false` | Serve the tools to agents on other machines through Cloudflare Access. See [External agents](#external-agents). |
 
 Depending on the provider, Paseo delivers tools through its native tool interface or MCP. The capabilities are the same. Start a new agent or reload an existing one after changing injection settings.
 
@@ -71,6 +72,51 @@ voice-only `speak` tool is separate from this policy.
 
 This setting limits the catalog presented to an agent. It is not a security boundary for an agent
 that can access the host through a shell.
+
+## External agents
+
+Agents that Paseo did not launch, such as an agent on another machine, can use the tools through a separate listener behind [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/). Access authenticates the caller. The daemon verifies the JWT Access attaches to each request and decides what the caller may do.
+
+```json
+{
+  "daemon": {
+    "mcp": {
+      "external": {
+        "enabled": true,
+        "listen": "127.0.0.1:6768",
+        "cloudflareAccess": {
+          "teamDomain": "example.cloudflareaccess.com",
+          "aud": ["<Access application audience tag>"]
+        },
+        "principals": [
+          { "email": "you@example.com", "permissions": ["workspace.read", "workspace.write"] },
+          { "commonName": "<service token client ID>", "permissions": ["workspace.read"] }
+        ]
+      }
+    }
+  }
+}
+```
+
+1. Create an Access application for the public hostname and copy its audience tag into `aud`.
+2. Point the cloudflared ingress rule for that hostname at the `listen` address, not at the daemon's main port.
+3. Configure the external agent's MCP server URL as `https://<hostname>/mcp/agents`.
+
+The listener serves only `/mcp/agents` and rejects any request without a valid `Cf-Access-Jwt-Assertion` header. The daemon password and the `Authorization` header play no part. An identity Access lets through but `principals` does not list gets `403`. Run `paseo daemon restart` after changing these settings. If `enabled` is `true` and a setting is missing, the daemon refuses to start.
+
+Each principal's permissions decide which tools it sees:
+
+| Permission          | Tools                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `workspace.read`    | Listing and inspecting agents, workspaces, scripts, terminals, and pending permissions                       |
+| `workspace.write`   | Creating, prompting, and controlling agents; terminals; starting and stopping scripts; answering permissions |
+| `workspace.manage`  | `create_workspace`, `rename_workspace`, `archive_workspace`                                                  |
+| `automation.manage` | Schedules and heartbeats                                                                                     |
+| `daemon.read`       | Providers, models, and profiles                                                                              |
+
+Browser tools and `speak` are never available to external agents. External agents are top-level callers: they pass `cwd` or `workspaceId` explicitly and check results with `get_agent_status`.
+
+`workspace.write` includes terminals, so it lets the caller run any command on the host.
 
 ## Mental model
 

@@ -47,6 +47,7 @@ interface TestPaseoDaemonOptions {
   auth?: PaseoDaemonConfig["auth"];
   pushNotificationSender?: PushNotificationSender;
   serviceProxy?: PaseoDaemonConfig["serviceProxy"];
+  externalMcp?: PaseoDaemonConfig["externalMcp"];
   webUi?: PaseoDaemonConfig["webUi"];
   trustedProxies?: PaseoDaemonConfig["trustedProxies"];
   agentProfiles?: AgentProfile[];
@@ -206,6 +207,7 @@ async function prepareTestDaemonConfig(
     auth: options.auth,
     pushNotificationSender: options.pushNotificationSender,
     serviceProxy: options.serviceProxy,
+    externalMcp: options.externalMcp,
     webUi: options.webUi,
     trustedProxies: options.trustedProxies,
     openai: options.openai,

@@ -7,13 +7,12 @@ import { createWorkspaceRuntimeStore } from "./workspace-runtime-store/index.js"
 import type { PluginRegistries } from "@getpaseo/protocol/plugin-registry";
 import { describeHookWorkspace } from "./plugins/lifecycle/index.js";
 import express from "express";
-import { createServer as createHTTPServer, type IncomingMessage, type ServerResponse } from "http";
+import { createServer as createHTTPServer } from "http";
 import { constants, existsSync, unlinkSync } from "fs";
 import { open, rm, stat } from "fs/promises";
 import { randomUUID } from "node:crypto";
 import { getHostName } from "./host-name.js";
 import path from "node:path";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Logger } from "pino";
 import { z } from "zod";
 import { createBranchChangeRouteHandler } from "./script-route-branch-handler.js";
@@ -140,7 +139,11 @@ import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
 import { AgentStorage } from "./agent/agent-storage.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
-import { createAgentMcpServer } from "./agent/mcp-server.js";
+import { createAgentMcpServer, serveStatelessMcpRequest } from "./agent/mcp-server.js";
+import { createCloudflareAccessVerifier } from "./external-mcp/cloudflare-access.js";
+import type { ExternalMcpConfig } from "./external-mcp/config.js";
+import { startExternalMcpServer, type ExternalMcpServer } from "./external-mcp/server.js";
+import { isToolAllowedForExternalCaller } from "./external-mcp/tool-permissions.js";
 import {
   createPaseoToolCatalog,
   createPaseoAgentToolManifest,
@@ -408,6 +411,7 @@ export interface PaseoDaemonConfig {
   trustedProxies?: true | string[];
   mcpEnabled?: boolean;
   mcpInjectIntoAgents?: boolean;
+  externalMcp?: ExternalMcpConfig | null;
   browserToolsEnabled?: boolean;
   /** Sends push notifications through Expo's push service. `false` keeps the daemon off exp.host. */
   pushEnabled?: boolean;
@@ -488,6 +492,7 @@ export interface PaseoDaemon {
   start(): Promise<void>;
   stop(): Promise<void>;
   getListenTarget(): ListenTarget | null;
+  getExternalMcpListenTarget(): ListenTarget | null;
   getServerId(): string;
 }
 
@@ -1538,8 +1543,8 @@ export async function createPaseoDaemon(
   {
     const agentMcpRoute = "/mcp/agents";
 
-    const createAgentMcpSession = async (callerAgentId?: string) => {
-      const agentMcpServer = await createAgentMcpServer(
+    const createAgentMcpSessionServer = (callerAgentId?: string) =>
+      createAgentMcpServer(
         createAgentToolHostDependencies({
           callerAgentId,
           paseoToolPolicy: callerAgentId
@@ -1547,27 +1552,6 @@ export async function createPaseoDaemon(
             : undefined,
         }),
       );
-
-      // Stateless mode: each HTTP request builds a fresh server + transport that is
-      // torn down when the response closes, so no per-session state is retained between
-      // requests. The agent control plane only lists and calls tools, neither of which
-      // needs cross-request state, so sessions would only pin memory for the life of the
-      // daemon (agents that exit without a clean DELETE never get reaped).
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        // NOTE: We enforce a Vite-like host allowlist at the app/websocket layer.
-        // StreamableHTTPServerTransport's built-in check requires exact Host header matches.
-        enableDnsRebindingProtection: false,
-      });
-      Object.assign(transport, {
-        onerror: (err: Error) => {
-          logger.error({ err }, "Agent MCP transport error");
-        },
-      });
-
-      await agentMcpServer.connect(transport);
-      return { server: agentMcpServer, transport };
-    };
 
     const runAgentMcpRequest = async (
       req: express.Request,
@@ -1603,52 +1587,34 @@ export async function createPaseoDaemon(
           "Agent MCP request",
         );
       }
-      try {
-        // Stateless: GET (standalone SSE) and DELETE (session termination) have no
-        // meaning without sessions. The MCP client tolerates 405 on the GET stream
-        // and never issues a DELETE because it is never handed a session id.
-        if (req.method !== "POST") {
-          res.status(405).json({
-            jsonrpc: "2.0",
-            error: {
-              code: -32000,
-              message: "Method not allowed",
-            },
-            id: null,
-          });
-          return;
-        }
-        const callerAgentIdRaw = req.query.callerAgentId;
-        let callerAgentId: string | undefined;
-        if (typeof callerAgentIdRaw === "string") {
-          callerAgentId = callerAgentIdRaw;
-        } else if (Array.isArray(callerAgentIdRaw) && typeof callerAgentIdRaw[0] === "string") {
-          callerAgentId = callerAgentIdRaw[0];
-        }
-        const { server, transport } = await createAgentMcpSession(callerAgentId);
-        res.on("close", () => {
-          void transport.close();
-          void server.close();
+      // Stateless: GET (standalone SSE) and DELETE (session termination) have no
+      // meaning without sessions. The MCP client tolerates 405 on the GET stream
+      // and never issues a DELETE because it is never handed a session id.
+      if (req.method !== "POST") {
+        res.status(405).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32000,
+            message: "Method not allowed",
+          },
+          id: null,
         });
-
-        await transport.handleRequest(
-          req as unknown as IncomingMessage,
-          res as unknown as ServerResponse,
-          req.body,
-        );
-      } catch (err) {
-        logger.error({ err }, "Failed to handle Agent MCP request");
-        if (!res.headersSent) {
-          res.status(500).json({
-            jsonrpc: "2.0",
-            error: {
-              code: -32603,
-              message: "Internal MCP server error",
-            },
-            id: null,
-          });
-        }
+        return;
       }
+      const callerAgentIdRaw = req.query.callerAgentId;
+      let callerAgentId: string | undefined;
+      if (typeof callerAgentIdRaw === "string") {
+        callerAgentId = callerAgentIdRaw;
+      } else if (Array.isArray(callerAgentIdRaw) && typeof callerAgentIdRaw[0] === "string") {
+        callerAgentId = callerAgentIdRaw[0];
+      }
+      await serveStatelessMcpRequest({
+        createServer: () => createAgentMcpSessionServer(callerAgentId),
+        req,
+        res,
+        body: req.body,
+        logger,
+      });
     };
 
     const handleAgentMcpRequest: express.RequestHandler = (req, res) => {
@@ -1660,6 +1626,44 @@ export async function createPaseoDaemon(
     app.delete(agentMcpRoute, handleAgentMcpRequest);
     logger.info({ route: agentMcpRoute, enabled: mcpEnabled }, "Agent MCP route mounted");
   }
+
+  let externalMcpServer: ExternalMcpServer | null = null;
+  const startExternalMcp = async () => {
+    const externalMcp = config.externalMcp;
+    if (!externalMcp) {
+      return;
+    }
+    if (externalMcp.principals.length === 0) {
+      logger.warn("External MCP has no principals configured; every request will be rejected");
+    }
+    externalMcpServer = await startExternalMcpServer({
+      listenTarget: parseListenString(externalMcp.listen),
+      verifier: createCloudflareAccessVerifier(externalMcp.cloudflareAccess),
+      principals: externalMcp.principals,
+      isEnabled: () => mcpEnabled,
+      createMcpServer: (caller) => {
+        const permissions = new Set(caller.permissions);
+        return createAgentMcpServer({
+          ...createAgentToolHostDependencies({}),
+          toolFilter: (toolName) => isToolAllowedForExternalCaller(toolName, permissions),
+        });
+      },
+      logger,
+    });
+    logger.info(
+      {
+        listen: formatListenTarget(externalMcpServer.listenTarget),
+        issuer: externalMcp.cloudflareAccess.issuer,
+        elapsed: elapsed(),
+      },
+      "External MCP listening",
+    );
+  };
+  const stopExternalMcp = async () => {
+    const server = externalMcpServer;
+    externalMcpServer = null;
+    await server?.stop();
+  };
 
   const speechService = createSpeechService({
     logger,
@@ -1688,6 +1692,7 @@ export async function createPaseoDaemon(
           "Service proxy listening",
         );
       }
+      await startExternalMcp();
 
       // Start main HTTP server
       await new Promise<void>((resolve, reject) => {
@@ -1890,6 +1895,7 @@ export async function createPaseoDaemon(
       unsubscribePluginProviders();
       await pluginRuntime.stopAllPlugins().catch(() => undefined);
       await serviceProxy.stopStandalone().catch(() => undefined);
+      await stopExternalMcp().catch(() => undefined);
       await agentProviderRuntime.shutdown().catch(() => undefined);
       if (mainStarted) {
         httpServer.closeAllConnections();
@@ -1907,6 +1913,7 @@ export async function createPaseoDaemon(
     // that is still open. Plugins themselves are stopped once every session
     // they serve has been closed, further down.
     unsubscribePluginProviders();
+    await stopExternalMcp();
     await hubRelationships.stop();
     workspaceReconciliation.dispose();
     scriptHealthMonitor.stop();
@@ -1962,6 +1969,7 @@ export async function createPaseoDaemon(
     start,
     stop,
     getListenTarget: () => boundListenTarget,
+    getExternalMcpListenTarget: () => externalMcpServer?.listenTarget ?? null,
     getServerId: () => serverId,
   };
 }

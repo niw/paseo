@@ -66,6 +66,106 @@
             },
             "injectIntoAgents": {
               "type": "boolean"
+            },
+            "external": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "description": "Serve the Agent MCP tools on a separate listener for external agents.",
+                  "type": "boolean"
+                },
+                "listen": {
+                  "description": "Listener address for external agents. Required when enabled.",
+                  "type": "string"
+                },
+                "cloudflareAccess": {
+                  "type": "object",
+                  "properties": {
+                    "teamDomain": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Cloudflare Access team domain, for example example.cloudflareaccess.com."
+                    },
+                    "aud": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "description": "Accepted Access application audience tags."
+                    }
+                  },
+                  "required": ["teamDomain", "aud"],
+                  "additionalProperties": false
+                },
+                "principals": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "email": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Matches the Access JWT email claim."
+                          },
+                          "permissions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "daemon.read",
+                                "daemon.manage",
+                                "tunnel.manage",
+                                "access.manage",
+                                "workspace.read",
+                                "workspace.write",
+                                "workspace.manage",
+                                "automation.manage",
+                                "hub.execute"
+                              ]
+                            }
+                          }
+                        },
+                        "required": ["email", "permissions"],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "commonName": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Matches the Access JWT common_name claim (service token client ID)."
+                          },
+                          "permissions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "daemon.read",
+                                "daemon.manage",
+                                "tunnel.manage",
+                                "access.manage",
+                                "workspace.read",
+                                "workspace.write",
+                                "workspace.manage",
+                                "automation.manage",
+                                "hub.execute"
+                              ]
+                            }
+                          }
+                        },
+                        "required": ["commonName", "permissions"],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": {}

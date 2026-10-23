@@ -25,6 +25,7 @@ import { resolveSpeechConfig } from "./speech/speech-config-resolver.js";
 import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { mergeHostnames, parseHostnamesEnv, type HostnamesConfig } from "./hostnames.js";
 import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
+import { resolveExternalMcpConfig } from "./external-mcp/config.js";
 
 export {
   loadPersistedConfig,
@@ -632,6 +633,7 @@ export function resolveConfigFromPersisted(
     trustedProxies,
     mcpEnabled,
     mcpInjectIntoAgents,
+    externalMcp: resolveExternalMcpConfig(persisted.daemon),
     browserToolsEnabled,
     pushEnabled,
     git: resolveGitProcessConfig(env, persisted),

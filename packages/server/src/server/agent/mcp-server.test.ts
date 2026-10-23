@@ -79,7 +79,13 @@ import { createTerminalManager, type TerminalManager } from "../../terminal/term
 import { createWorkerTerminalManager } from "../../terminal/worker-terminal-manager.js";
 import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
 import { PASEO_TOOL_NAMES } from "@getpaseo/protocol/paseo-tool-presentation/index";
-import { MutableDaemonConfigSchema, type AgentProfile } from "@getpaseo/protocol/messages";
+import {
+  DAEMON_PERMISSIONS,
+  MutableDaemonConfigSchema,
+  type AgentProfile,
+  type DaemonPermission,
+} from "@getpaseo/protocol/messages";
+import { isToolAllowedForExternalCaller } from "../external-mcp/tool-permissions.js";
 import type { DaemonConfigStore } from "../daemon-config-store.js";
 import type { BrowserToolsBroker, BrowserToolsExecuteInput } from "../browser-tools/broker.js";
 import type { BrowserToolsResponsePayload } from "../browser-tools/errors.js";
@@ -970,6 +976,51 @@ describe("Paseo tool timeline presentation", () => {
       await client.close();
       await server.close();
     }
+  });
+});
+
+describe("external caller tool permissions", () => {
+  async function listToolsFor(permissions: DaemonPermission[]): Promise<string[]> {
+    const granted = new Set(permissions);
+    const server = await createAgentMcpServer({
+      agentManager: new BoundaryAgentManagerFake() as AgentManager,
+      agentStorage: new BoundaryAgentStorageFake() as AgentStorage,
+      providerSnapshotManager:
+        new BoundaryProviderSnapshotManagerFake() as unknown as ProviderSnapshotManager,
+      browserToolsEnabled: true,
+      browserToolsBroker: new FakeBrowserToolsBroker({
+        requestId: "req-external",
+        ok: true,
+        result: { command: "list_tabs", tabs: [] },
+      }) as BrowserToolsBroker,
+      enableVoiceTools: true,
+      toolFilter: (toolName) => isToolAllowedForExternalCaller(toolName, granted),
+      logger: createTestLogger(),
+    });
+    const client = await connectInMemoryMcpClient(server);
+    try {
+      const { tools } = await client.listTools();
+      return tools.map((tool) => tool.name).sort();
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  }
+
+  it("lists only read tools for a read-only caller", async () => {
+    const tools = await listToolsFor(["workspace.read"]);
+    expect(tools).toContain("list_agents");
+    expect(tools).toContain("capture_terminal");
+    expect(tools).not.toContain("create_agent");
+    expect(tools).not.toContain("send_terminal_keys");
+    expect(tools).not.toContain("list_schedules");
+  });
+
+  it("never lists browser or voice tools, whatever the grant", async () => {
+    const tools = await listToolsFor([...DAEMON_PERMISSIONS]);
+    expect(tools).toContain("create_agent");
+    expect(tools).toContain("create_schedule");
+    expect(tools.filter((name) => name.startsWith("browser_") || name === "speak")).toEqual([]);
   });
 });
 

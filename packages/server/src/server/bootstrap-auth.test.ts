@@ -428,3 +428,51 @@ describe("daemon bearer auth", () => {
     }
   });
 });
+
+describe("external MCP listener", () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    process.env = { ...originalEnv, PASEO_SUPERVISED: "0" };
+  });
+
+  test("is not started unless configured", async () => {
+    const daemonHandle = await createTestPaseoDaemon();
+    try {
+      expect(daemonHandle.daemon.getExternalMcpListenTarget()).toBeNull();
+    } finally {
+      await daemonHandle.close();
+    }
+  });
+
+  test("serves only Access-authenticated MCP on its own port", async () => {
+    const daemonHandle = await createTestPaseoDaemon({
+      externalMcp: {
+        listen: "127.0.0.1:0",
+        cloudflareAccess: {
+          issuer: "https://example.cloudflareaccess.com",
+          audiences: ["aud-1"],
+        },
+        principals: [
+          { match: { kind: "email", value: "niw@niw.at" }, permissions: ["workspace.read"] },
+        ],
+      },
+    });
+    try {
+      const target = daemonHandle.daemon.getExternalMcpListenTarget();
+      if (target?.type !== "tcp") {
+        throw new Error("expected the external listener on TCP");
+      }
+      expect(target.port).not.toBe(daemonHandle.port);
+      const external = `http://127.0.0.1:${target.port}`;
+
+      const mcp = await fetch(`${external}/mcp/agents`, { method: "POST" });
+      expect(mcp.status).toBe(401);
+      const status = await fetch(`${external}/api/status`);
+      expect(status.status).toBe(404);
+    } finally {
+      await daemonHandle.close();
+    }
+    expect(daemonHandle.daemon.getExternalMcpListenTarget()).toBeNull();
+  });
+});

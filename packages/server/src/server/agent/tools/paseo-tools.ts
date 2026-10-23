@@ -157,6 +157,8 @@ export interface PaseoToolHostDependencies {
   browserToolsEnabled?: boolean;
   browserToolsBroker?: BrowserToolsBroker | null;
   paseoToolPolicy?: ProviderPaseoToolsPolicy;
+  /** Extra gate applied after the policy; a tool it rejects is never registered. */
+  toolFilter?: (toolName: string) => boolean;
   paseoHome?: string;
   worktreesRoot?: string;
   /**
@@ -739,6 +741,9 @@ function createToolCatalog(
     handler: (input: any, context: PaseoToolExecutionContext) => Promise<PaseoToolResult>,
   ) => {
     if (!isPaseoToolEnabled(options.paseoToolPolicy, name)) {
+      return;
+    }
+    if (options.toolFilter && !options.toolFilter(name)) {
       return;
     }
     const operation = hostTools.get(name as Parameters<typeof hostTools.get>[0]);
