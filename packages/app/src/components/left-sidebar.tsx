@@ -902,27 +902,29 @@ function DesktopSidebar({
               {isInitialLoad && !hasActiveHostFilter ? (
                 <SidebarAgentListSkeleton />
               ) : (
-                <SidebarWorkspaceList
-                  collapsedProjectKeys={collapsedProjectKeys}
-                  onToggleProjectCollapsed={toggleProjectCollapsed}
-                  shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-                  groupMode={groupMode}
-                  workspaceGroups={workspaceGroups}
-                  projectIconTargets={projectIconTargets}
-                  pinnedGroups={pinnedGroups}
-                  projects={projects}
-                  hasProjectsBeforeFilter={hasProjectsBeforeFilter}
-                  hasActiveProjectFilter={hasActiveProjectFilter}
-                  workspaceEntriesByKey={workspaceEntriesByKey}
-                  isRefreshing={isManualRefresh && isRevalidating}
-                  onRefresh={handleRefresh}
-                  onAddProject={handleOpenProject}
-                  onImportSession={handleImportSession}
-                  onWorkspacePress={closeSidebar}
-                  parentGestureRef={closeGestureRef}
-                  dragGestureHostActive={active}
-                  listHeaderComponent={workspacesSectionHeaderElement}
-                />
+                <View style={styles.sidebarContent} dataSet={WINDOW_CONTENT_DATASET}>
+                  <SidebarWorkspaceList
+                    collapsedProjectKeys={collapsedProjectKeys}
+                    onToggleProjectCollapsed={toggleProjectCollapsed}
+                    shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
+                    groupMode={groupMode}
+                    workspaceGroups={workspaceGroups}
+                    projectIconTargets={projectIconTargets}
+                    pinnedGroups={pinnedGroups}
+                    projects={projects}
+                    hasProjectsBeforeFilter={hasProjectsBeforeFilter}
+                    hasActiveProjectFilter={hasActiveProjectFilter}
+                    workspaceEntriesByKey={workspaceEntriesByKey}
+                    isRefreshing={isManualRefresh && isRevalidating}
+                    onRefresh={handleRefresh}
+                    onAddProject={handleOpenProject}
+                    onImportSession={handleImportSession}
+                    onWorkspacePress={closeSidebar}
+                    parentGestureRef={closeGestureRef}
+                    dragGestureHostActive={active}
+                    listHeaderComponent={workspacesSectionHeaderElement}
+                  />
+                </View>
               )}
               <SidebarSelectionHost active={active} workspaceEntriesByKey={workspaceEntriesByKey} />
             </SidebarToastRegion>
