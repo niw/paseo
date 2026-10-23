@@ -87,6 +87,15 @@ export function pathBaseName(path: string): string {
   return parts[parts.length - 1] ?? trimmed;
 }
 
+// Row titles show only the last directories; the row subtitle carries the full path.
+export function pathTail(path: string, segmentCount = 2): string {
+  const trimmed = path.replace(/[\\/]+$/, "");
+  const parts = trimmed.split(/[\\/]/);
+  if (parts.length <= segmentCount + 1) return trimmed;
+  const separator = trimmed.includes("\\") && !trimmed.includes("/") ? "\\" : "/";
+  return `…${separator}${parts.slice(-segmentCount).join(separator)}`;
+}
+
 export function buildManualGithubRepositoryChoices(query: string): GithubRepositoryChoice[] {
   const repo = query.trim();
   if (!repo) return [];
@@ -167,7 +176,7 @@ export function buildCloneLocationOptions(input: {
         id: parent,
         path: parent,
         displayPath: path,
-        secondaryText: pathExists ? "Already exists" : `Parent directory: ${parent}`,
+        secondaryText: pathExists ? `Already exists: ${path}` : path,
         disabled: pathExists,
       },
     ];

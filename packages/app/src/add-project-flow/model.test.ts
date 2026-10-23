@@ -20,6 +20,7 @@ import {
   buildAddProjectMethods,
   buildCloneLocationOptions,
   buildManualGithubRepositoryChoices,
+  pathTail,
 } from "./options";
 
 const HOST: AddProjectHost = {
@@ -175,14 +176,14 @@ describe("Add Project options", () => {
         id: "~/dev",
         path: "~/dev",
         displayPath: "~/dev/paseo",
-        secondaryText: "Parent directory: ~/dev",
+        secondaryText: "~/dev/paseo",
         disabled: false,
       },
       {
         id: "~/workspace",
         path: "~/workspace",
         displayPath: "~/workspace/paseo",
-        secondaryText: "Already exists",
+        secondaryText: "Already exists: ~/workspace/paseo",
         disabled: true,
       },
     ]);
@@ -200,9 +201,16 @@ describe("Add Project options", () => {
         id: "/Users/moboudra/dev",
         path: "/Users/moboudra/dev",
         displayPath: "/Users/moboudra/dev/dotfiles",
-        secondaryText: "Parent directory: /Users/moboudra/dev",
+        secondaryText: "/Users/moboudra/dev/dotfiles",
         disabled: false,
       },
     ]);
+  });
+
+  it("titles a path with its last directories", () => {
+    expect(pathTail("~/dev/client/team/paseo")).toBe("…/team/paseo");
+    expect(pathTail("~/dev/paseo/")).toBe("~/dev/paseo");
+    expect(pathTail("/Users")).toBe("/Users");
+    expect(pathTail("C:\\Users\\me\\src\\paseo")).toBe("…\\src\\paseo");
   });
 });
