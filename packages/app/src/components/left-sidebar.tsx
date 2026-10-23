@@ -790,24 +790,26 @@ function DesktopSidebar({
         {isInitialLoad && !hasActiveHostFilter ? (
           <SidebarAgentListSkeleton />
         ) : (
-          <SidebarWorkspaceList
-            collapsedProjectKeys={collapsedProjectKeys}
-            onToggleProjectCollapsed={toggleProjectCollapsed}
-            shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-            groupMode={groupMode}
-            workspaceGroups={workspaceGroups}
-            projectIconTargets={projectIconTargets}
-            pinnedGroups={pinnedGroups}
-            projects={projects}
-            hasProjectsBeforeFilter={hasProjectsBeforeFilter}
-            hasActiveProjectFilter={hasActiveProjectFilter}
-            workspaceEntriesByKey={workspaceEntriesByKey}
-            isRefreshing={isManualRefresh && isRevalidating}
-            onRefresh={handleRefresh}
-            onAddProject={handleOpenProject}
-            onImportSession={handleImportSession}
-            listHeaderComponent={workspacesSectionHeaderElement}
-          />
+          <View style={styles.sidebarContent} dataSet={WINDOW_CONTENT_DATASET}>
+            <SidebarWorkspaceList
+              collapsedProjectKeys={collapsedProjectKeys}
+              onToggleProjectCollapsed={toggleProjectCollapsed}
+              shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
+              groupMode={groupMode}
+              workspaceGroups={workspaceGroups}
+              projectIconTargets={projectIconTargets}
+              pinnedGroups={pinnedGroups}
+              projects={projects}
+              hasProjectsBeforeFilter={hasProjectsBeforeFilter}
+              hasActiveProjectFilter={hasActiveProjectFilter}
+              workspaceEntriesByKey={workspaceEntriesByKey}
+              isRefreshing={isManualRefresh && isRevalidating}
+              onRefresh={handleRefresh}
+              onAddProject={handleOpenProject}
+              onImportSession={handleImportSession}
+              listHeaderComponent={workspacesSectionHeaderElement}
+            />
+          </View>
         )}
 
         <SidebarCalloutSlot />
@@ -847,6 +849,10 @@ function WorkspacesSectionHeader() {
     </SidebarSectionHeader>
   );
 }
+
+// Electron does not clip app-region rectangles to scroll viewports, so rows scrolled
+// up under the sidebar header turn its drag region into no-drag. See index.html.
+const WINDOW_CONTENT_DATASET = { windowContent: "true" };
 
 // Stable element so the sidebar list's listHeaderComponent prop keeps identity across
 // renders (WorkspacesSectionHeader takes no props).
