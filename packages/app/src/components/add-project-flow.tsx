@@ -60,12 +60,10 @@ import {
   filterAddProjectHosts,
   joinDirectoryPath,
   pathBaseName,
+  pathTail,
   type AddProjectMethodId,
 } from "@/add-project-flow/options";
-import {
-  buildProjectPickerOptions,
-  type ProjectPickerOption,
-} from "@/components/project-picker-options";
+import { buildProjectPickerOptions } from "@/components/project-picker-options";
 import { Shortcut } from "@/components/ui/shortcut";
 import { useRevealActiveItem } from "@/components/ui/scroll-reveal";
 import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
@@ -105,6 +103,9 @@ interface FlowRowOption {
   subtitle: string | null;
   icon: ComponentType<{ size?: number; color?: string }>;
   disabled?: boolean;
+  // Path rows title with the last directories and wrap the full path in the subtitle,
+  // so narrow screens still show the whole path before it is chosen.
+  wrapSubtitle?: boolean;
   testID: string;
   select: () => void;
 }
@@ -163,12 +164,6 @@ function methodIcon(method: AddProjectMethodId): FlowRowOption["icon"] {
   if (method === "browse") return FolderOpen;
   if (method === "new-directory") return FolderPlus;
   return Search;
-}
-
-function directoryOptionSubtitle(option: ProjectPickerOption, shortPath: string): string | null {
-  if (option.kind === "path") return "Open this path";
-  if (shortPath === option.path) return null;
-  return option.path;
 }
 
 function progressText(page: AddProjectPage): string {
@@ -291,7 +286,7 @@ function FlowRow({
           {option.title}
         </Text>
         {option.subtitle ? (
-          <Text style={styles.rowSubtitle} numberOfLines={1}>
+          <Text style={styles.rowSubtitle} numberOfLines={option.wrapSubtitle ? undefined : 1}>
             {option.subtitle}
           </Text>
         ) : null}
@@ -637,17 +632,15 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
       }));
     }
     if (page.kind === "directory-search") {
-      return pathOptions.map((option) => {
-        const shortPath = shortenPath(option.path);
-        return {
-          id: option.path,
-          title: shortPath,
-          subtitle: directoryOptionSubtitle(option, shortPath),
-          icon: Folder,
-          testID: pathTestId(option.path),
-          select: () => void openAddedProject(option.path, "directory-search"),
-        };
-      });
+      return pathOptions.map((option) => ({
+        id: option.path,
+        title: pathTail(shortenPath(option.path)),
+        subtitle: option.path,
+        icon: Folder,
+        wrapSubtitle: true,
+        testID: pathTestId(option.path),
+        select: () => void openAddedProject(option.path, "directory-search"),
+      }));
     }
     if (page.kind === "github-search") {
       const search = githubQuery.data?.query === page.query ? githubQuery.data.payload : null;
@@ -692,10 +685,11 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
         existingPaths: [...recommendedPaths, ...directoryPaths],
       }).map((option) => ({
         id: option.id,
-        title: shortenPath(option.displayPath),
+        title: pathTail(shortenPath(option.displayPath)),
         subtitle: option.secondaryText,
         icon: HardDrive,
         disabled: option.disabled,
+        wrapSubtitle: true,
         testID: pathTestId(option.displayPath),
         select: () => void cloneRepository(page, option.path),
       }));
@@ -703,9 +697,10 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     if (page.kind === "new-directory-parent") {
       return pathOptions.map((option) => ({
         id: option.path,
-        title: shortenPath(option.path),
-        subtitle: option.kind === "path" ? "Use this parent" : option.path,
+        title: pathTail(shortenPath(option.path)),
+        subtitle: option.path,
         icon: Folder,
+        wrapSubtitle: true,
         testID: pathTestId(option.path),
         select: () =>
           setState((current) => openNewDirectoryNamePage(current, page.hostId, option.path)),
