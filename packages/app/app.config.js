@@ -5,6 +5,7 @@ const withAndroidAsyncStorageSize = require("./plugins/with-android-async-storag
 const withAndroidOptionalCamera = require("./plugins/with-android-optional-camera");
 const withAndroidProfileable = require("./plugins/with-android-profileable");
 const withFdroidAutolinking = require("./plugins/with-fdroid-autolinking");
+const removeIosPushEntitlement = require("./plugins/remove-ios-push-entitlement");
 const withPasteInput = require("./plugins/with-paste-input");
 const withAndroidScroll = require("./modules/paseo-scroll/app.plugin");
 const { getNativeReleaseVersion } = require("./native-release-version");
@@ -114,7 +115,7 @@ export default {
         NSMicrophoneUsageDescription: "This app needs access to the microphone for voice commands.",
         ITSAppUsesNonExemptEncryption: false,
       },
-      bundleIdentifier: variant.packageId,
+      bundleIdentifier: process.env.IOS_BUNDLE_ID || variant.packageId,
       ...(variant.googleServiceInfoPlist
         ? { googleServicesFile: variant.googleServiceInfoPlist }
         : {}),
@@ -144,7 +145,6 @@ export default {
     },
     plugins: [
       "expo-router",
-      withPasteInput,
       withAndroidScroll,
       [withAndroidAsyncStorageSize, 64],
       ...buildProfile.cameraPlugins,
@@ -158,6 +158,7 @@ export default {
           },
         },
       ],
+      removeIosPushEntitlement,
       ...buildProfile.notificationPlugins,
       "expo-audio",
       [
@@ -179,6 +180,7 @@ export default {
           },
         },
       ],
+      withPasteInput,
       ...buildProfile.fdroidPlugins,
       ...(isProfileBuild || isWatchdogBuild ? [withAndroidProfileable] : []),
     ],
