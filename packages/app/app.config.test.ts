@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Load the copies the Expo CLI uses for prebuild, not older hoisted ones.
 const requireFromExpo = createRequire(require.resolve("expo/package.json"));
@@ -58,4 +58,26 @@ describe("Android app config", () => {
     },
     30_000,
   );
+});
+
+describe("iOS bundle identifier", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    delete require.cache[require.resolve("./app.config.js")];
+  });
+
+  it.each([
+    ["production", undefined, "sh.paseo", "sh.paseo"],
+    ["development", undefined, "sh.paseo.debug", "sh.paseo.debug"],
+    ["production", "com.example.paseo", "com.example.paseo", "sh.paseo"],
+    ["development", "com.example.paseo.dev", "com.example.paseo.dev", "sh.paseo.debug"],
+  ])("resolves %s with IOS_BUNDLE_ID=%s", async (variant, bundleId, expected, androidPackage) => {
+    vi.stubEnv("APP_VARIANT", variant);
+    vi.stubEnv("IOS_BUNDLE_ID", bundleId);
+    // Expo caches the config module; each case represents a separate CLI invocation.
+    delete require.cache[require.resolve("./app.config.js")];
+    const { exp } = await getPrebuildConfigAsync(__dirname, { platforms: ["ios"] });
+    expect(exp.ios.bundleIdentifier).toBe(expected);
+    expect(exp.android.package).toBe(androidPackage);
+  });
 });
