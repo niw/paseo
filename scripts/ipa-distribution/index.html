@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Install {{TITLE}}</title>
+    <style>
+      body {
+        margin: 0;
+        background: #f4f5f8;
+        color: #202635;
+        font:
+          17px/1.7 system-ui,
+          sans-serif;
+        display: grid;
+        min-height: 100svh;
+        place-items: center;
+      }
+      main {
+        background: white;
+        padding: 36px;
+        border-radius: 24px;
+        max-width: 420px;
+        margin: 24px;
+        box-shadow: 0 12px 48px #18213b0b;
+      }
+      h1 {
+        margin: 0;
+        font-size: 34px;
+      }
+      small {
+        color: #697386;
+      }
+      a {
+        color: #315cce;
+      }
+      .button {
+        display: block;
+        text-align: center;
+        background: #315cce;
+        color: white;
+        padding: 14px;
+        border-radius: 12px;
+        text-decoration: none;
+        font-weight: 650;
+        margin: 24px 0 12px;
+      }
+      p {
+        margin: 16px 0;
+      }
+      footer {
+        margin-top: 28px;
+        font-size: 13px;
+        color: #697386;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>{{TITLE}}</h1>
+      <small>{{VERSION}}</small>
+      <p>Open this page in Safari on your iPhone to install the app.</p>
+      <a class="button" href="{{INSTALL_URL}}">Install {{TITLE}}</a>
+      <p>Choose “Install” when prompted.</p>
+      <a href="{{IPA_URL}}">Download IPA</a>
+      <footer>
+        This build is for registered devices. For development builds, enable Developer Mode on your
+        iPhone.
+      </footer>
+    </main>
+  </body>
+</html>
