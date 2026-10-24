@@ -15,6 +15,16 @@ export interface PushNotifications {
 
 export type PushNotificationSender = Pick<PushNotifications, "send">;
 
+/** Stands in for delivery when `daemon.push.enabled` is off, so nothing reaches exp.host. */
+export function disabledPushNotificationSender(logger: pino.Logger): PushNotificationSender {
+  const pushLogger = logger.child({ module: "push" });
+  return {
+    async send() {
+      pushLogger.debug("Push notifications are disabled; set daemon.push.enabled to send them");
+    },
+  };
+}
+
 export function createPushNotifications(options: {
   logger: pino.Logger;
   filePath: string;

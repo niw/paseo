@@ -79,6 +79,16 @@
           },
           "additionalProperties": {}
         },
+        "push": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "Send push notifications to the mobile app through Expo's push service (exp.host). Defaults to true; set false to keep the daemon from contacting Expo.",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": {}
+        },
         "git": {
           "type": "object",
           "properties": {

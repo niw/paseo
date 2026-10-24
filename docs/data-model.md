@@ -547,6 +547,8 @@ than treating it as valid.
 
 Simple set of Expo push notification tokens. Loaded with permissive parsing (filters non-string entries). Persisted with atomic temp-file rename.
 
+Sending goes through Expo's push service at `exp.host`. Set `daemon.push.enabled` to `false` in `config.json` to keep the daemon from contacting it; the daemon still records tokens apps register.
+
 ---
 
 ## 7. Daemon meta files
