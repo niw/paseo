@@ -1185,18 +1185,22 @@ function buildClaudePlanPermissionActions(
   return actions;
 }
 
-interface TimelineFragment {
+interface TimelineBlock {
   kind: "assistant" | "reasoning";
   text: string;
 }
 
+interface TimelineBlockState extends TimelineBlock {
+  emittedLength: number;
+}
+
+// Claude Code streams a message as indexed content blocks, then delivers each completed block
+// again as its own assistant message sharing the message id. Text is tracked per block index so
+// a completed block is reconciled with the block it repeats, not with the whole message.
 interface TimelineMessageState {
   id: string;
-  assistantText: string;
-  reasoningText: string;
-  emittedAssistantLength: number;
-  emittedReasoningLength: number;
-  stopped: boolean;
+  blocks: Map<number, TimelineBlockState>;
+  completedBlockCount: number;
 }
 
 class TimelineAssembler {
@@ -1235,8 +1239,18 @@ class TimelineAssembler {
       return [];
     }
     const state = this.ensureMessageState(messageId, runId);
-    const fragments = this.extractFragments(message.message?.content);
-    return this.applyAbsoluteFragments(state, fragments);
+    const items: AgentTimelineItem[] = [];
+    // Every block counts toward the index, including tool_use and empty thinking blocks, so the
+    // next completed block lines up with its streamed index.
+    for (const rawBlock of readContentBlocks(message.message?.content)) {
+      const index = state.completedBlockCount;
+      state.completedBlockCount += 1;
+      const block = readTimelineBlock(rawBlock);
+      if (block) {
+        items.push(...this.applyCompletedBlock(state, index, block));
+      }
+    }
+    return items;
   }
 
   private consumeStreamEvent(
@@ -1267,18 +1281,23 @@ class TimelineAssembler {
         createIfMissing: false,
         messageId: streamEventMessageId,
       });
-      if (!messageId) {
-        return [];
+      if (messageId) {
+        this.finalizeMessage(messageId, runId);
       }
-      return this.finalizeMessage(messageId, runId);
+      return [];
     }
 
     if (eventType === "content_block_start") {
-      return this.consumeDeltaContent(event.content_block, runId, streamEventMessageId);
+      return this.consumeDeltaContent(
+        event.content_block,
+        event.index,
+        runId,
+        streamEventMessageId,
+      );
     }
 
     if (eventType === "content_block_delta") {
-      return this.consumeDeltaContent(event.delta, runId, streamEventMessageId);
+      return this.consumeDeltaContent(event.delta, event.index, runId, streamEventMessageId);
     }
 
     return [];
@@ -1286,11 +1305,12 @@ class TimelineAssembler {
 
   private consumeDeltaContent(
     content: unknown,
+    rawIndex: unknown,
     runId: string | null,
     messageIdHint: string | null,
   ): AgentTimelineItem[] {
-    const fragments = this.extractFragments(content);
-    if (fragments.length === 0) {
+    const block = readTimelineBlock(content);
+    if (!block) {
       return [];
     }
     const messageId = this.resolveMessageId({
@@ -1302,107 +1322,83 @@ class TimelineAssembler {
       return [];
     }
     const state = this.ensureMessageState(messageId, runId);
-    return this.appendFragments(state, fragments);
-  }
-
-  private appendFragments(
-    state: TimelineMessageState,
-    fragments: TimelineFragment[],
-  ): AgentTimelineItem[] {
-    for (const fragment of fragments) {
-      if (fragment.kind === "assistant") {
-        state.assistantText += fragment.text;
-      } else {
-        state.reasoningText += fragment.text;
-      }
+    const index = typeof rawIndex === "number" ? rawIndex : 0;
+    const existing = state.blocks.get(index);
+    if (!existing) {
+      const created: TimelineBlockState = { ...block, emittedLength: 0 };
+      state.blocks.set(index, created);
+      return this.emitNewContent(state, created);
     }
-    return this.emitNewContent(state);
-  }
-
-  private applyAbsoluteFragments(
-    state: TimelineMessageState,
-    fragments: TimelineFragment[],
-  ): AgentTimelineItem[] {
-    const assistantText = fragments
-      .filter((fragment) => fragment.kind === "assistant")
-      .map((fragment) => fragment.text)
-      .join("");
-    const reasoningText = fragments
-      .filter((fragment) => fragment.kind === "reasoning")
-      .map((fragment) => fragment.text)
-      .join("");
-
-    if (assistantText.length > 0) {
-      if (!assistantText.startsWith(state.assistantText)) {
-        state.emittedAssistantLength = 0;
-      }
-      state.assistantText = assistantText;
-    }
-    if (reasoningText.length > 0) {
-      if (!reasoningText.startsWith(state.reasoningText)) {
-        state.emittedReasoningLength = 0;
-      }
-      state.reasoningText = reasoningText;
-    }
-    return this.emitNewContent(state);
-  }
-
-  private finalizeMessage(messageId: string, runId: string | null): AgentTimelineItem[] {
-    const state = this.messages.get(messageId);
-    if (!state) {
+    if (existing.kind !== block.kind) {
       return [];
     }
-    state.stopped = true;
-    const items = this.emitNewContent(state);
+    existing.text += block.text;
+    return this.emitNewContent(state, existing);
+  }
+
+  private applyCompletedBlock(
+    state: TimelineMessageState,
+    index: number,
+    block: TimelineBlock,
+  ): AgentTimelineItem[] {
+    const existing = state.blocks.get(index);
+    if (!existing) {
+      const created: TimelineBlockState = { ...block, emittedLength: 0 };
+      state.blocks.set(index, created);
+      return this.emitNewContent(state, created);
+    }
+    // The stream already showed this block. Only text past what streamed is new.
+    if (existing.kind !== block.kind || !block.text.startsWith(existing.text)) {
+      return [];
+    }
+    existing.text = block.text;
+    return this.emitNewContent(state, existing);
+  }
+
+  private finalizeMessage(messageId: string, runId: string | null): void {
+    if (!this.messages.has(messageId)) {
+      return;
+    }
     if (runId && this.activeMessageByRun.get(runId) === messageId) {
       this.activeMessageByRun.delete(runId);
     }
     this.finalizedMessageIds.add(messageId);
     this.messages.delete(messageId);
-    return items;
   }
 
-  private emitNewContent(state: TimelineMessageState): AgentTimelineItem[] {
-    const items: AgentTimelineItem[] = [];
-    const nextAssistantText = state.assistantText.slice(state.emittedAssistantLength);
-    if (
-      nextAssistantText.length > 0 &&
-      nextAssistantText !== INTERRUPT_TOOL_USE_PLACEHOLDER &&
-      !isClaudeTranscriptNoiseText(nextAssistantText)
-    ) {
-      state.emittedAssistantLength = state.assistantText.length;
-      items.push({ type: "assistant_message", text: nextAssistantText, messageId: state.id });
+  private emitNewContent(
+    state: TimelineMessageState,
+    block: TimelineBlockState,
+  ): AgentTimelineItem[] {
+    const nextText = block.text.slice(block.emittedLength);
+    if (nextText.length === 0) {
+      return [];
     }
-
-    const nextReasoningText = state.reasoningText.slice(state.emittedReasoningLength);
-    if (nextReasoningText.length > 0) {
-      state.emittedReasoningLength = state.reasoningText.length;
-      items.push({ type: "reasoning", text: nextReasoningText });
+    if (block.kind === "reasoning") {
+      block.emittedLength = block.text.length;
+      return [{ type: "reasoning", text: nextText }];
     }
-    return items;
+    if (nextText === INTERRUPT_TOOL_USE_PLACEHOLDER || isClaudeTranscriptNoiseText(nextText)) {
+      return [];
+    }
+    block.emittedLength = block.text.length;
+    return [{ type: "assistant_message", text: nextText, messageId: state.id }];
   }
 
   private ensureMessageState(messageId: string, runId: string | null): TimelineMessageState {
+    if (runId) {
+      this.activeMessageByRun.set(runId, messageId);
+    }
     const existing = this.messages.get(messageId);
     if (existing) {
-      existing.stopped = false;
-      if (runId) {
-        this.activeMessageByRun.set(runId, messageId);
-      }
       return existing;
     }
     const created: TimelineMessageState = {
       id: messageId,
-      assistantText: "",
-      reasoningText: "",
-      emittedAssistantLength: 0,
-      emittedReasoningLength: 0,
-      stopped: false,
+      blocks: new Map(),
+      completedBlockCount: 0,
     };
     this.messages.set(messageId, created);
-    if (runId) {
-      this.activeMessageByRun.set(runId, messageId);
-    }
     return created;
   }
 
@@ -1430,37 +1426,6 @@ class TimelineAssembler {
     return synthetic;
   }
 
-  private extractFragments(content: unknown): TimelineFragment[] {
-    if (typeof content === "string") {
-      if (content.length === 0) {
-        return [];
-      }
-      return [{ kind: "assistant", text: content }];
-    }
-    const blocks = Array.isArray(content) ? content : [content];
-    const fragments: TimelineFragment[] = [];
-    for (const rawBlock of blocks) {
-      if (!isClaudeContentChunk(rawBlock)) {
-        continue;
-      }
-      if (
-        (rawBlock.type === "text" || rawBlock.type === "text_delta") &&
-        typeof rawBlock.text === "string" &&
-        rawBlock.text.length > 0
-      ) {
-        fragments.push({ kind: "assistant", text: rawBlock.text });
-      }
-      if (
-        (rawBlock.type === "thinking" || rawBlock.type === "thinking_delta") &&
-        typeof rawBlock.thinking === "string" &&
-        rawBlock.thinking.length > 0
-      ) {
-        fragments.push({ kind: "reasoning", text: rawBlock.thinking });
-      }
-    }
-    return fragments;
-  }
-
   private readMessageIdFromAssistantMessage(
     message: SDKMessage & { type: "assistant" },
   ): string | null {
@@ -1475,6 +1440,40 @@ class TimelineAssembler {
     const messageContainer = toObjectRecord(event.message);
     return readTrimmedString(event.message_id) ?? readTrimmedString(messageContainer?.id) ?? null;
   }
+}
+
+function readContentBlocks(content: unknown): unknown[] {
+  if (Array.isArray(content)) {
+    return content;
+  }
+  if (content === null || content === undefined) {
+    return [];
+  }
+  return [content];
+}
+
+function readTimelineBlock(content: unknown): TimelineBlock | null {
+  if (typeof content === "string") {
+    return content.length > 0 ? { kind: "assistant", text: content } : null;
+  }
+  if (!isClaudeContentChunk(content)) {
+    return null;
+  }
+  if (
+    (content.type === "text" || content.type === "text_delta") &&
+    typeof content.text === "string" &&
+    content.text.length > 0
+  ) {
+    return { kind: "assistant", text: content.text };
+  }
+  if (
+    (content.type === "thinking" || content.type === "thinking_delta") &&
+    typeof content.thinking === "string" &&
+    content.thinking.length > 0
+  ) {
+    return { kind: "reasoning", text: content.thinking };
+  }
+  return null;
 }
 
 function isSyntheticUserEntry(entry: unknown): boolean {
