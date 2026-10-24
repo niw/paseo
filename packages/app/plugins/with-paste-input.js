@@ -1,12 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const {
-  IOSConfig,
-  withAppDelegate,
-  withDangerousMod,
-  withInfoPlist,
-  withPodfile,
-} = require("expo/config-plugins");
+const { IOSConfig, withBaseMod, withDangerousMod, withPodfile } = require("expo/config-plugins");
 
 const BRIDGING_HEADER_IMPORT = "#import <react-native-paste-input/PasteInputModule.h>";
 const SCENE_DELEGATE = `
@@ -41,22 +35,44 @@ function configurePasteInputBridgingHeader(contents) {
 }
 
 function withPasteInput(config) {
-  const withDelegate = withAppDelegate(config, (modConfig) => {
-    if (modConfig.modResults.language !== "swift") {
-      throw new Error("Paste input setup requires a Swift AppDelegate");
-    }
-    modConfig.modResults.contents = configurePasteInputAppDelegate(modConfig.modResults.contents);
-    return modConfig;
+  const withDelegate = withBaseMod(config, {
+    platform: "ios",
+    mod: "appDelegate",
+    async action(modConfig) {
+      const configured = await modConfig.modRequest.nextMod(modConfig);
+      if (configured.modResults.language !== "swift") {
+        throw new Error("Paste input setup requires a Swift AppDelegate");
+      }
+      configured.modResults.contents = configurePasteInputAppDelegate(
+        configured.modResults.contents,
+      );
+      return configured;
+    },
   });
-  const withScene = withInfoPlist(withDelegate, (modConfig) => {
-    const scenes =
-      modConfig.modResults.UIApplicationSceneManifest?.UISceneConfigurations
-        ?.UIWindowSceneSessionRoleApplication;
-    if (!scenes || scenes.length !== 1) {
-      throw new Error("Paste input requires Expo's single scene configuration");
-    }
-    scenes[0].UISceneDelegateClassName = "PaseoSceneDelegate";
-    return modConfig;
+  // Wrap expo-build-properties so its ownership check sees the Expo scene on repeat prebuilds.
+  const withScene = withBaseMod(withDelegate, {
+    platform: "ios",
+    mod: "infoPlist",
+    async action(modConfig) {
+      const previousScenes =
+        modConfig.modResults.UIApplicationSceneManifest?.UISceneConfigurations
+          ?.UIWindowSceneSessionRoleApplication;
+      if (
+        previousScenes?.length === 1 &&
+        previousScenes[0].UISceneDelegateClassName === "PaseoSceneDelegate"
+      ) {
+        previousScenes[0].UISceneDelegateClassName = "EXExpoAppSceneDelegate";
+      }
+      const configured = await modConfig.modRequest.nextMod(modConfig);
+      const scenes =
+        configured.modResults.UIApplicationSceneManifest?.UISceneConfigurations
+          ?.UIWindowSceneSessionRoleApplication;
+      if (!scenes || scenes.length !== 1) {
+        throw new Error("Paste input requires Expo's single scene configuration");
+      }
+      scenes[0].UISceneDelegateClassName = "PaseoSceneDelegate";
+      return configured;
+    },
   });
   const withPods = withPodfile(withScene, (modConfig) => {
     // Paste input checks this legacy flag even though RN 0.86 only supports Fabric.

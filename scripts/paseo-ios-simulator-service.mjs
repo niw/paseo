@@ -21,7 +21,8 @@ const daemonEndpoint =
 
 const env = {
   ...process.env,
-  PATH: `${join(rootDir, "node_modules/.bin")}:${process.env.PATH || ""}`,
+  GEM_HOME: join(rootDir, ".gem"),
+  PATH: `${join(rootDir, ".gem/bin")}:${join(rootDir, "node_modules/.bin")}:${process.env.PATH || ""}`,
   APP_VARIANT: "development",
   CI: process.env.CI || "1",
   EXPO_PUBLIC_LOCAL_DAEMON: daemonEndpoint,
@@ -57,9 +58,10 @@ async function main() {
 
   console.log("Building app dependencies...");
   try {
-    run("npm", ["--prefix", rootDir, "run", "build:client"], { cwd: rootDir });
+    run("npm", ["--prefix", rootDir, "run", "build:app-deps"], { cwd: rootDir });
+    run("make", ["install-cocoapods"], { cwd: rootDir });
     console.log("Generating iOS project...");
-    run("npx", ["expo", "prebuild", "--platform", "ios", "--non-interactive"], {
+    run("npx", ["expo", "prebuild", "--platform", "ios", "--no-clean"], {
       cwd: appDir,
     });
 

@@ -145,7 +145,6 @@ export default {
     },
     plugins: [
       "expo-router",
-      withPasteInput,
       withAndroidScroll,
       [withAndroidAsyncStorageSize, 64],
       ...buildProfile.cameraPlugins,
@@ -181,6 +180,7 @@ export default {
           },
         },
       ],
+      withPasteInput,
       ...buildProfile.fdroidPlugins,
       ...(isProfileBuild || isWatchdogBuild ? [withAndroidProfileable] : []),
     ],
