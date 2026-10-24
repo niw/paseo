@@ -3,8 +3,8 @@ const path = require("node:path");
 const {
   IOSConfig,
   withAppDelegate,
+  withBaseMod,
   withDangerousMod,
-  withInfoPlist,
   withPodfile,
 } = require("expo/config-plugins");
 
@@ -48,22 +48,42 @@ function withPasteInput(config) {
     modConfig.modResults.contents = configurePasteInputAppDelegate(modConfig.modResults.contents);
     return modConfig;
   });
-  const withScene = withInfoPlist(withDelegate, (modConfig) => {
-    const scenes =
-      modConfig.modResults.UIApplicationSceneManifest?.UISceneConfigurations
-        ?.UIWindowSceneSessionRoleApplication;
-    if (!scenes || scenes.length !== 1) {
-      throw new Error("Paste input requires Expo's single scene configuration");
-    }
-    scenes[0].UISceneDelegateClassName = "PaseoSceneDelegate";
-    return modConfig;
-  });
-  const withPods = withPodfile(withScene, (modConfig) => {
+  const withPods = withPodfile(withDelegate, (modConfig) => {
     // Paste input checks this legacy flag even though RN 0.86 only supports Fabric.
     modConfig.modResults.contents = configurePasteInputPodfile(modConfig.modResults.contents);
     return modConfig;
   });
   return withPasteInputBridgingHeader(withPods);
+}
+
+// Register after expo-build-properties. It wraps that plugin's Info.plist mod so its ownership
+// check sees the Expo scene on repeat prebuilds. The AppDelegate part stays in withPasteInput,
+// ahead of expo-build-properties, so the hardware keyboard plugin still finds the scene delegate.
+function withPasteInputScene(config) {
+  return withBaseMod(config, {
+    platform: "ios",
+    mod: "infoPlist",
+    async action(modConfig) {
+      const previousScenes =
+        modConfig.modResults.UIApplicationSceneManifest?.UISceneConfigurations
+          ?.UIWindowSceneSessionRoleApplication;
+      if (
+        previousScenes?.length === 1 &&
+        previousScenes[0].UISceneDelegateClassName === "PaseoSceneDelegate"
+      ) {
+        previousScenes[0].UISceneDelegateClassName = "EXExpoAppSceneDelegate";
+      }
+      const configured = await modConfig.modRequest.nextMod(modConfig);
+      const scenes =
+        configured.modResults.UIApplicationSceneManifest?.UISceneConfigurations
+          ?.UIWindowSceneSessionRoleApplication;
+      if (!scenes || scenes.length !== 1) {
+        throw new Error("Paste input requires Expo's single scene configuration");
+      }
+      scenes[0].UISceneDelegateClassName = "PaseoSceneDelegate";
+      return configured;
+    },
+  });
 }
 
 function withPasteInputBridgingHeader(config) {
@@ -82,6 +102,7 @@ function withPasteInputBridgingHeader(config) {
 }
 
 module.exports = withPasteInput;
+module.exports.withPasteInputScene = withPasteInputScene;
 module.exports.configurePasteInputAppDelegate = configurePasteInputAppDelegate;
 module.exports.configurePasteInputBridgingHeader = configurePasteInputBridgingHeader;
 
