@@ -96,7 +96,7 @@ Paseo worktrees expose the native iOS dev app through the `ios-simulator` servic
 
 - **Xcode** (the full app, not just the Command Line Tools) — install it from the Mac App Store, or from `developer.apple.com/download` for a specific version. It provides `xcodebuild` and `xcrun simctl`; accept its license and let first-run component installation finish before starting the service.
 - **An iOS Simulator runtime with at least one iPhone device type**. Recent Xcode versions may not bundle a runtime — add one via Xcode → Settings → Components (older Xcode: "Platforms"). The service targets `iPhone 16 Pro` by default (override with `PASEO_IOS_DEVICE_TYPE`) and falls back to any iPhone; it fails with `No iPhone simulator device type is installed` when none exist.
-- **Homebrew** — CocoaPods itself installs automatically: `expo prebuild` runs `pod install` on a cold worktree, and when the CocoaPods CLI is missing the runner installs it for you. It tries `gem install cocoapods` first and falls back to Homebrew (`brew install cocoapods`), so having Homebrew available lets that fallback succeed without a manual step.
+- **Ruby and RubyGems** — the service uses the same checkout-local CocoaPods installation as the [local iOS Make builds](#running-the-ios-app-on-a-local-simulator).
 
 `serve-sim`, Expo, and Metro come from `npm ci`, and CocoaPods installs itself on the first prebuild as described above.
 
@@ -109,6 +109,19 @@ Starting the service must not create, focus, reveal, or leave behind macOS Simul
 **Troubleshooting.** If `xcrun simctl` fails with `unable to find utility "simctl"`, the active developer directory is still the Command Line Tools even though Xcode is installed. Point it at Xcode: `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`, then confirm with `xcrun --find simctl`.
 
 ### Running the iOS app on a local simulator
+
+For a bundled Release app without Metro, run
+`make ios-simulator IOS_BUNDLE_ID=com.example.paseo`.
+Use `make ios-simulator-build IOS_BUNDLE_ID=com.example.paseo` to build
+without starting the simulator. Its
+prebuild uses `--no-clean`: Expo SDK 57 otherwise deletes the iOS project
+and Pods on every run. Use `make ios-clean` when you need to regenerate
+them from scratch.
+
+`make install-cocoapods` installs CocoaPods into the checkout's `./.gem` when
+it is missing. The iOS Make builds run this target automatically and set
+`GEM_HOME` and `PATH` to use that installation. Ruby and `gem` must already
+be available on your `PATH`.
 
 For fast, native, interactive iOS dev at the Mac — as opposed to the remote `/.sim` preview above — skip the service and build the dev client directly:
 
@@ -128,6 +141,26 @@ EXPO_PUBLIC_LOCAL_DAEMON=localhost:6768 npm run ios                          # s
 The iOS simulator shares the Mac's loopback, so `localhost:<port>` reaches the host daemon directly.
 
 **Gotcha — `EXPO_PUBLIC_*` is inlined into the JS bundle at Metro bundle time, not read at runtime.** Set it in the same shell that starts Metro. If the app still connects to the old daemon, Metro served a cached bundle; re-bundle clean with `cd packages/app && EXPO_PUBLIC_LOCAL_DAEMON=… npx expo start -c` and reload the app.
+
+### Building the iOS app for a device
+
+Run `make ios-build` with an installed Apple Development certificate and
+development provisioning profile. Specify your bundle ID, team and profile:
+
+```bash
+make ios-build IOS_BUNDLE_ID=com.example.paseo \
+  IOS_TEAM_ID=ABCDEFGHIJ IOS_PROVISIONING_PROFILE="My Development Profile"
+```
+
+All three variables are required; you can also export them in your shell.
+The profile must cover the chosen bundle ID and the devices you install
+on. The IPA is written to
+`packages/app/build/ios/ipa/Paseo.ipa`.
+
+`IOS_BUNDLE_ID` also works when invoking Expo directly. It sets the full
+iOS identifier, without adding a development suffix or changing the
+Android package. Without it, direct Expo commands use the app variant's
+standard identifier (`sh.paseo` or `sh.paseo.debug`).
 
 ### Desktop renderer profiling
 
