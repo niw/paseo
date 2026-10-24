@@ -112,6 +112,11 @@ ios-simulator: ios-simulator-build
 		$(IOS_BUILD_DIR)/simulator/Build/Products/Release-iphonesimulator/Paseo.app
 	xcrun simctl launch "$(IOS_SIMULATOR)" "$(IOS_BUNDLE_ID)"
 
+# Serves the ios-build IPA for over-the-air install. See scripts/ipa-distribution/README.md.
+.PHONY: ios-serve
+ios-serve:
+	node scripts/ipa-distribution/server.mjs --ipa $(IOS_BUILD_DIR)/ipa/Paseo.ipa
+
 # Writes artifacts/paseo-cli-<version>-<commit>.tgz. Run it on a host with
 #   npx -y ./paseo-cli-<version>-<commit>.tgz daemon restart
 .PHONY: cli-build
