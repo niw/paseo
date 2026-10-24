@@ -53,6 +53,22 @@ afterEach(() => {
 });
 
 describe("convertClaudeHistoryEntry", () => {
+  test("does not replay api-request-blob rows as chat", () => {
+    const entry = {
+      type: "api-request-blob",
+      sessionId: "session-1",
+      hash: "53cb15f048bef81c427a662ab23584a15fc51160",
+      message: {
+        role: "user",
+        content: [{ type: "text", text: "The following tools are no longer available." }],
+      },
+    };
+    const mapBlocks = vi.fn().mockReturnValue([{ type: "assistant_message", text: "leaked" }]);
+
+    expect(convertClaudeHistoryEntry(entry, mapBlocks)).toEqual([]);
+    expect(mapBlocks).not.toHaveBeenCalled();
+  });
+
   test("maps user tool results to timeline items", () => {
     const toolUseId = "toolu_test";
     const entry = {
