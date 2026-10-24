@@ -1422,7 +1422,8 @@ function ThoughtSlot({
       itemId={itemId}
       onInlineDetailsExpandedChangeByItemId={onInlineDetailsExpandedChangeByItemId}
       toolName="thinking"
-      args={revealedText}
+      // Claude ends each thinking block with a blank line. Keep it between blocks, not at the end.
+      args={revealedText.trimEnd()}
       status={status === "ready" ? "completed" : "executing"}
       isLastInSequence={isLastInSequence}
       defaultExpanded={defaultExpanded}
