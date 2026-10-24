@@ -6401,6 +6401,12 @@ function convertClaudeHistoryEntryPreamble(
   if (entry.type === "user" && isSyntheticHistoryUserEntry(entry)) {
     return { shortCircuit: [] };
   }
+  // Only conversation turns replay as chat. Claude Code also writes rows that carry a `message`
+  // but are not turns, such as `api-request-blob` copies of request content including
+  // system reminders.
+  if (entry.type !== "user" && entry.type !== "assistant") {
+    return { shortCircuit: [] };
+  }
 
   const message = entry?.message;
   if (!message || !("content" in message)) {
