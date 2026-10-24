@@ -77,6 +77,20 @@ describe("server config", () => {
     expect(config.providerCatalogRefreshTimeoutMs).toBe(180_000);
   });
 
+  test("sends push notifications unless the config turns them off", async () => {
+    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-push-"));
+    roots.push(paseoHome);
+
+    expect(loadConfig(paseoHome, { env: {} }).pushEnabled).toBe(true);
+
+    await writeFile(
+      path.join(paseoHome, "config.json"),
+      JSON.stringify({ daemon: { push: { enabled: false } } }),
+    );
+
+    expect(loadConfig(paseoHome, { env: {} }).pushEnabled).toBe(false);
+  });
+
   test("resolves reload state from the supplied validated snapshot", async () => {
     const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-snapshot-"));
     roots.push(paseoHome);

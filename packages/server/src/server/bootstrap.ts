@@ -185,7 +185,7 @@ import { applyTerminalAgentHookSetting } from "../terminal/agent-hooks/terminal-
 import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
 import { createRelayRuntime, type RelayRuntime } from "./relay-runtime.js";
 import { admitSecuredRelaySocket } from "./websocket/secure-relay-ingress.js";
-import type { PushNotificationSender } from "./push/index.js";
+import { disabledPushNotificationSender, type PushNotificationSender } from "./push/index.js";
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
@@ -417,6 +417,8 @@ export interface PaseoDaemonConfig {
   mcpEnabled?: boolean;
   mcpInjectIntoAgents?: boolean;
   browserToolsEnabled?: boolean;
+  /** Sends push notifications through Expo's push service. `false` keeps the daemon off exp.host. */
+  pushEnabled?: boolean;
   git?: {
     maxProcessesPerSecond: number;
     maxProcessConcurrency: number;
@@ -1830,7 +1832,8 @@ export async function createPaseoDaemon(
               (hostname) => scriptHealthMonitor.getHealthForHostname(hostname),
               workspaceGitService,
               github,
-              config.pushNotificationSender,
+              config.pushNotificationSender ??
+                (config.pushEnabled ? undefined : disabledPushNotificationSender(logger)),
               providerSnapshotManager,
               {
                 listen: formatListenTarget(boundListenTarget ?? listenTarget),

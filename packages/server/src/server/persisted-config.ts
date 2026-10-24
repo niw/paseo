@@ -265,6 +265,17 @@ export const PersistedConfigSchema = z
           })
           .passthrough()
           .optional(),
+        push: z
+          .object({
+            enabled: z
+              .boolean()
+              .optional()
+              .describe(
+                "Send push notifications to the mobile app through Expo's push service (exp.host). Defaults to true; set false to keep the daemon from contacting Expo.",
+              ),
+          })
+          .passthrough()
+          .optional(),
         git: z
           .object({
             maxProcessesPerSecond: z.number().int().positive().optional(),

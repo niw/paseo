@@ -527,6 +527,10 @@ function resolveBrowserToolsEnabled(persisted: ReturnType<typeof loadPersistedCo
   return persisted.daemon?.browserTools?.enabled ?? false;
 }
 
+function resolvePushEnabled(persisted: ReturnType<typeof loadPersistedConfig>): boolean {
+  return persisted.daemon?.push?.enabled ?? true;
+}
+
 /**
  * Both profile lists stay `undefined` when absent rather than defaulting to an
  * empty array: for terminal profiles that is what selects the built-in
@@ -620,6 +624,7 @@ export function resolveConfigFromPersisted(
     paseoHome,
     desktopManaged: env.PASEO_DESKTOP_MANAGED === "1",
     worktreesRoot: resolveWorktreesRoot(paseoHome, persisted),
+    pushEnabled: resolvePushEnabled(persisted),
     pluginRegistries: persisted.pluginRegistries,
     pluginRegistryUrl: env.PASEO_PLUGIN_REGISTRY,
     mcpDebug: env.MCP_DEBUG === "1",
