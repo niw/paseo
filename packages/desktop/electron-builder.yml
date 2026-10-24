@@ -43,7 +43,7 @@ mac:
   artifactName: "Paseo-${version}-${arch}.${ext}"
   minimumSystemVersion: "13.0.0"
   category: public.app-category.developer-tools
-  icon: assets/icon.icns
+  icon: ../app/assets/images/AppIcon.icon
   hardenedRuntime: true
   notarize: true
   entitlements: build/entitlements.mac.plist
