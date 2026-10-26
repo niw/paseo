@@ -141,7 +141,7 @@ export interface ClaudeReplayParentFacts {
   /** agentId -> tool call, recovered by scraping tool-result text. Legacy fallback only. */
   linksByAgentId: ReadonlyMap<string, { toolCallId: string; failed: boolean }>;
   /** Task `tool_use` id -> outcome. Usable once meta.json supplies the link directly. */
-  outcomesByToolCallId: ReadonlyMap<string, { failed: boolean }>;
+  outcomesByToolCallId: ReadonlyMap<string, { status: ProviderSubagentStatus }>;
 }
 
 interface ParentLink {
@@ -178,13 +178,10 @@ function resolveParentLink(
 ): ParentLink | null {
   const metaToolUseId = subagent.meta?.toolUseId?.trim();
   if (metaToolUseId && parent.toolCalls.has(metaToolUseId)) {
-    const outcome = parent.outcomesByToolCallId.get(metaToolUseId);
-    let status: ProviderSubagentStatus | null = null;
-    if (outcome) status = outcome.failed ? "failed" : "completed";
     return {
       id: metaToolUseId,
       toolCallId: metaToolUseId,
-      status,
+      status: parent.outcomesByToolCallId.get(metaToolUseId)?.status ?? null,
     };
   }
 
