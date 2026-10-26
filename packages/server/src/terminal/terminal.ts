@@ -20,6 +20,7 @@ import {
   windowsCommandShell,
 } from "@getpaseo/plugin/internal/windows-command";
 import { createExternalProcessEnv } from "../server/paseo-env.js";
+import { withoutClaudeParentSessionEnv } from "../server/agent/providers/claude/parent-session-env.js";
 import {
   resolveExternalProcessPath,
   resolvePaseoCliBinDir,
@@ -192,6 +193,7 @@ function isTerminalActivityInterruptInput(data: string): boolean {
 interface BuildTerminalEnvironmentInput {
   shell: string;
   env: Record<string, string>;
+  /** The daemon environment the terminal inherits. Defaults to `process.env`. */
   baseEnv?: Record<string, string>;
   zshShellIntegrationDir?: string;
   paseoCliBinDir?: string | null;
@@ -378,14 +380,13 @@ function prepareZshShellIntegrationRuntimeDir(sourceDir = resolveZshShellIntegra
 export function buildTerminalEnvironment(
   input: BuildTerminalEnvironmentInput,
 ): Record<string, string> {
-  const baseEnv: Record<string, string> = createExternalProcessEnv(
-    input.baseEnv ?? process.env,
-    input.env,
-    {
-      TERM: "xterm-256color",
-      TERM_PROGRAM: "kitty",
-    },
-  );
+  // A terminal is the user's own shell, so it never inherits the Claude Code session that
+  // may have started the daemon. Variables the terminal's own env sets still apply.
+  const inheritedEnv = withoutClaudeParentSessionEnv(input.baseEnv ?? process.env);
+  const baseEnv: Record<string, string> = createExternalProcessEnv(inheritedEnv, input.env, {
+    TERM: "xterm-256color",
+    TERM_PROGRAM: "kitty",
+  });
   const envWithAgentHooks = prependPaseoCliToPath(
     baseEnv,
     input.paseoCliBinDir === undefined ? resolvePaseoCliBinDir() : input.paseoCliBinDir,
