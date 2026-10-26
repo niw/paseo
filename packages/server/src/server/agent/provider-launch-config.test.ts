@@ -253,6 +253,8 @@ describe("createProviderEnv", () => {
       CLAUDE_CODE_ENTRYPOINT: "sdk-ts",
       CLAUDE_CODE_SSE_PORT: "11803",
       CLAUDE_AGENT_SDK_VERSION: "0.2.71",
+      CLAUDE_CODE_CHILD_SESSION: "1",
+      CLAUDE_CODE_SESSION_ID: "parent-session",
       CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING: "true",
     };
 
@@ -263,6 +265,8 @@ describe("createProviderEnv", () => {
     expect(env.CLAUDE_CODE_ENTRYPOINT).toBeUndefined();
     expect(env.CLAUDE_CODE_SSE_PORT).toBeUndefined();
     expect(env.CLAUDE_AGENT_SDK_VERSION).toBeUndefined();
+    expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined();
+    expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined();
     expect(env.CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING).toBe("true");
   });
 });
