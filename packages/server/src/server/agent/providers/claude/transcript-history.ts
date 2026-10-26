@@ -3,6 +3,7 @@ import fs, { type FileHandle } from "node:fs/promises";
 import { setImmediate } from "node:timers/promises";
 import path from "node:path";
 import { normalizeProviderReplayTimestamp } from "../../provider-history-timestamps.js";
+import { selectClaudeCurrentBranch, type ClaudeTranscriptNode } from "./transcript-branch.js";
 import {
   parseClaudeSubagentMeta,
   type ClaudeReplayEntry,
@@ -215,7 +216,9 @@ async function indexHistory(
       if (meta) metaByAgentId.set(agentId, meta);
     }
   }
-  const parentLocations: RecordLocation[] = [];
+  let parentLocations: RecordLocation[] = [];
+  // Only the fields that place a record in the conversation tree, so the scan holds no content.
+  const parentNodes: ClaudeTranscriptNode[] = [];
   const locationsByAgentId = new Map<string, RecordLocation[]>();
   async function scan(
     file: string,
@@ -227,13 +230,24 @@ async function indexHistory(
   }
   for (const file of sidechainFiles) {
     await scan(file, (entry, location) => {
-      if (file === historyPath && entry.isSidechain !== true) parentLocations.push(location);
+      if (file === historyPath && entry.isSidechain !== true) {
+        parentLocations.push(location);
+        parentNodes.push({
+          type: entry.type,
+          uuid: entry.uuid,
+          parentUuid: entry.parentUuid,
+          logicalParentUuid: entry.logicalParentUuid,
+          ...(isToolResult(entry) ? { message: { content: [{ type: "tool_result" }] } } : {}),
+        });
+      }
       if (entry.isSidechain !== true || typeof entry.agentId !== "string") return;
       const locations = locationsByAgentId.get(entry.agentId) ?? [];
       locations.push(location);
       locationsByAgentId.set(entry.agentId, locations);
     });
   }
+  const currentBranch = selectClaudeCurrentBranch(parentNodes);
+  parentLocations = parentLocations.filter((_, index) => currentBranch[index]);
   const workflowEntriesByRunId = new Map<string, AsyncIterable<TranscriptEntry>>();
   for (const [runId, files] of workflowFiles) {
     const locations: RecordLocation[] = [];
