@@ -2,6 +2,7 @@ import { assignTaskNotificationReplayIds } from "./task-notification-tool-call.j
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeProviderReplayTimestamp } from "../../provider-history-timestamps.js";
+import { selectClaudeCurrentBranch, type ClaudeTranscriptNode } from "./transcript-branch.js";
 import {
   parseClaudeSubagentMeta,
   type ClaudeReplayEntry,
@@ -199,7 +200,9 @@ function indexHistory(historyPath: string, descriptors: Map<string, number>): Cl
       if (meta) metaByAgentId.set(agentId, meta);
     }
   }
-  const parentLocations: RecordLocation[] = [];
+  let parentLocations: RecordLocation[] = [];
+  // Only the fields that place a record in the conversation tree, so the scan holds no content.
+  const parentNodes: ClaudeTranscriptNode[] = [];
   const locationsByAgentId = new Map<string, RecordLocation[]>();
   function scan(
     file: string,
@@ -211,13 +214,24 @@ function indexHistory(historyPath: string, descriptors: Map<string, number>): Cl
   }
   for (const file of sidechainFiles) {
     scan(file, (entry, location) => {
-      if (file === historyPath && entry.isSidechain !== true) parentLocations.push(location);
+      if (file === historyPath && entry.isSidechain !== true) {
+        parentLocations.push(location);
+        parentNodes.push({
+          type: entry.type,
+          uuid: entry.uuid,
+          parentUuid: entry.parentUuid,
+          logicalParentUuid: entry.logicalParentUuid,
+          ...(isToolResult(entry) ? { message: { content: [{ type: "tool_result" }] } } : {}),
+        });
+      }
       if (entry.isSidechain !== true || typeof entry.agentId !== "string") return;
       const locations = locationsByAgentId.get(entry.agentId) ?? [];
       locations.push(location);
       locationsByAgentId.set(entry.agentId, locations);
     });
   }
+  const currentBranch = selectClaudeCurrentBranch(parentNodes);
+  parentLocations = parentLocations.filter((_, index) => currentBranch[index]);
   const workflowEntriesByRunId = new Map<string, Iterable<TranscriptEntry>>();
   for (const [runId, files] of workflowFiles) {
     const locations: RecordLocation[] = [];
