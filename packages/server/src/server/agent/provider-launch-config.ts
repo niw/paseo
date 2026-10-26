@@ -8,6 +8,7 @@ import {
   type ProcessEnvRecord,
   type ExternalProcessEnv,
 } from "../paseo-env.js";
+import { CLAUDE_PARENT_SESSION_ENV_KEYS } from "./providers/claude/parent-session-env.js";
 export {
   AgentProviderRuntimeSettingsMapSchema,
   ProviderCommandSchema,
@@ -205,16 +206,6 @@ export function migrateProviderSettings(
   return ProviderOverridesSchema.parse(migrated);
 }
 
-// Env vars that indicate a running Claude Code session. If the daemon itself is
-// launched from inside Claude Code (e.g. by a Paseo agent), these leak into
-// child processes and cause "cannot be launched inside another session" errors.
-const PARENT_SESSION_ENV_VARS = [
-  "CLAUDECODE",
-  "CLAUDE_CODE_ENTRYPOINT",
-  "CLAUDE_CODE_SSE_PORT",
-  "CLAUDE_AGENT_SDK_VERSION",
-];
-
 export interface ProviderEnvOptions {
   baseEnv?: ProcessEnvRecord;
   runtimeSettings?: ProviderRuntimeSettings;
@@ -238,7 +229,7 @@ function collectProviderEnvOverlays(
 export function createProviderEnvSpec(options: ProviderEnvOptions = {}): ProviderEnvSpec {
   const overlays = collectProviderEnvOverlays(options.runtimeSettings, options.overlays ?? []);
   const envOverlay: ProcessEnvRecord = Object.assign({}, ...overlays);
-  for (const key of PARENT_SESSION_ENV_VARS) {
+  for (const key of CLAUDE_PARENT_SESSION_ENV_KEYS) {
     envOverlay[key] = undefined;
   }
   return {

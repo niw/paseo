@@ -1123,6 +1123,29 @@ describe.skipIf(isPlatform("win32"))("terminal title", () => {
     expect(result.stdout.split(/\r?\n/)).toContain("PASEO_CUSTOM_PROMPT> ");
   });
 
+  it("does not inherit the Claude Code session that started the daemon", () => {
+    const env = buildTerminalEnvironment({
+      shell: "/bin/sh",
+      baseEnv: {
+        PATH: "/usr/bin",
+        CLAUDECODE: "1",
+        CLAUDE_CODE_CHILD_SESSION: "1",
+        CLAUDE_CODE_SESSION_ID: "parent-session",
+        CLAUDE_CODE_USE_BEDROCK: "1",
+        CLAUDE_CONFIG_DIR: "/config/claude",
+      },
+      env: { CLAUDE_CODE_SESSION_ID: "set-by-terminal" },
+      paseoCliBinDir: null,
+      paseoHookCliPath: null,
+    });
+
+    expect(env.CLAUDECODE).toBeUndefined();
+    expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined();
+    expect(env.CLAUDE_CODE_SESSION_ID).toBe("set-by-terminal");
+    expect(env.CLAUDE_CODE_USE_BEDROCK).toBe("1");
+    expect(env.CLAUDE_CONFIG_DIR).toBe("/config/claude");
+  });
+
   it.skipIf(!hasZsh)("emits zsh shell integration command completion", async () => {
     const homeDir = mkdtempSync(join(tmpdir(), "terminal-zsh-command-finished-home-"));
     temporaryDirs.push(homeDir);
