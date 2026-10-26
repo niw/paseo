@@ -406,20 +406,24 @@ export function mapTaskNotificationSystemRecordToToolCall(
   return toTaskNotificationToolCall(parsed);
 }
 
-export function readTaskNotificationToolUseIdFromHistoryRecord(record: unknown): string | null {
+export function readTaskNotificationFromHistoryRecord(
+  record: unknown,
+): TaskNotificationEnvelope | null {
   const parsedRecord = TaskNotificationHistoryRecordSchema.safeParse(record);
   if (!parsedRecord.success) {
     return null;
   }
   if (parsedRecord.data.type === "user" && parsedRecord.data.message) {
-    return (
-      parseTaskNotificationFromUserContent({
-        content: parsedRecord.data.message.content,
-        messageId: parsedRecord.data.uuid ?? parsedRecord.data.message_id,
-      })?.toolUseId ?? null
-    );
+    return parseTaskNotificationFromUserContent({
+      content: parsedRecord.data.message.content,
+      messageId: parsedRecord.data.uuid ?? parsedRecord.data.message_id,
+    });
   }
-  return parseTaskNotificationFromSystemRecord(record)?.toolUseId ?? null;
+  return parseTaskNotificationFromSystemRecord(record);
+}
+
+export function readTaskNotificationToolUseIdFromHistoryRecord(record: unknown): string | null {
+  return readTaskNotificationFromHistoryRecord(record)?.toolUseId ?? null;
 }
 
 export function coerceTaskNotificationHistoryRecordToSystemMessage(

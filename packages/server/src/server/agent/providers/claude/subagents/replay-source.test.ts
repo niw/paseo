@@ -36,7 +36,7 @@ function parentWithTaskCall(failed = false): ClaudeReplayParentFacts {
       ],
     ]),
     linksByAgentId: new Map(),
-    outcomesByToolCallId: new Map([[TOOL_USE_ID, { failed }]]),
+    outcomesByToolCallId: new Map([[TOOL_USE_ID, { status: failed ? "failed" : "completed" }]]),
   };
 }
 

@@ -32,8 +32,10 @@ import {
 import {
   mapTaskNotificationSystemRecordToToolCall,
   mapTaskNotificationUserContentToToolCall,
+  readTaskNotificationFromHistoryRecord,
   readTaskNotificationToolUseIdFromHistoryRecord,
 } from "./task-notification-tool-call.js";
+import type { ProviderSubagentStatus } from "../../provider-subagents/store.js";
 import {
   getClaudeContextWindowMaxTokens,
   getClaudeModelsWithSettings,
@@ -6262,27 +6264,32 @@ async function readClaudeReplayParentFacts(
 ): Promise<ClaudeReplayParentFacts> {
   const toolCalls = new Map<string, { title?: string; description?: string }>();
   const linksByAgentId = new Map<string, { toolCallId: string; failed: boolean }>();
-  const outcomes = new Map<string, { failed: boolean }>();
+  const outcomes = new Map<string, { status: ProviderSubagentStatus }>();
   for await (const entry of entries) {
+    // A background subagent's Task result only says it launched. Its outcome arrives later as
+    // a task notification.
+    const notification = readTaskNotificationFromHistoryRecord(entry);
+    if (notification?.toolUseId) {
+      outcomes.set(notification.toolUseId, {
+        status: readTaskNotificationSubagentStatus(notification.status),
+      });
+      continue;
+    }
+    const launchedInBackground = toObjectRecord(entry.toolUseResult)?.status === "async_launched";
     const content = toObjectRecord(entry.message)?.content;
     if (!Array.isArray(content)) continue;
     for (const value of content) {
       const block = toObjectRecord(value);
-      if (
-        block?.type === "tool_use" &&
-        (block.name === "Task" || block.name === "Agent") &&
-        typeof block.id === "string"
-      ) {
-        const input = toObjectRecord(block.input);
-        const title = readNonEmptyString(input?.name) ?? readNonEmptyString(input?.subagent_type);
-        const description = readNonEmptyString(input?.description);
-        toolCalls.set(block.id, {
-          ...(title ? { title } : {}),
-          ...(description ? { description } : {}),
-        });
+      const taskCall = readClaudeTaskToolCall(block);
+      if (taskCall) {
+        toolCalls.set(taskCall.id, taskCall.facts);
       }
       if (block?.type !== "tool_result" || typeof block.tool_use_id !== "string") continue;
-      outcomes.set(block.tool_use_id, { failed: block.is_error === true });
+      if (!launchedInBackground) {
+        outcomes.set(block.tool_use_id, {
+          status: block.is_error === true ? "failed" : "completed",
+        });
+      }
       const agentId = readLegacyClaudeSubagentId(block.content);
       if (agentId)
         linksByAgentId.set(agentId, {
@@ -6296,6 +6303,40 @@ async function readClaudeReplayParentFacts(
     linksByAgentId,
     outcomesByToolCallId: new Map([...outcomes].filter(([id]) => toolCalls.has(id))),
   };
+}
+
+function readClaudeTaskToolCall(
+  block: Record<string, unknown> | null | undefined,
+): { id: string; facts: { title?: string; description?: string } } | null {
+  if (
+    block?.type !== "tool_use" ||
+    (block.name !== "Task" && block.name !== "Agent") ||
+    typeof block.id !== "string"
+  ) {
+    return null;
+  }
+  const input = toObjectRecord(block.input);
+  const title = readNonEmptyString(input?.name) ?? readNonEmptyString(input?.subagent_type);
+  const description = readNonEmptyString(input?.description);
+  return {
+    id: block.id,
+    facts: { ...(title ? { title } : {}), ...(description ? { description } : {}) },
+  };
+}
+
+function readTaskNotificationSubagentStatus(status: string | null): ProviderSubagentStatus {
+  switch (status?.toLowerCase()) {
+    case "failed":
+    case "error":
+      return "failed";
+    case "canceled":
+    case "cancelled":
+    case "killed":
+    case "stopped":
+      return "canceled";
+    default:
+      return "completed";
+  }
 }
 
 function readLegacyClaudeSubagentId(content: unknown): string | undefined {

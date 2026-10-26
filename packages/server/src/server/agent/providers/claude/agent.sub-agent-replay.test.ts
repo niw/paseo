@@ -62,6 +62,40 @@ function taskToolResult(options: { isError?: boolean; mentionAgentId?: boolean }
   });
 }
 
+// Claude Code's Task result for a background subagent says only that it launched.
+function backgroundLaunchResult(): string {
+  return JSON.stringify({
+    type: "user",
+    sessionId: "replay-session",
+    timestamp: "2026-07-26T06:27:48.000Z",
+    message: {
+      role: "user",
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: TOOL_USE_ID,
+          content: [
+            { type: "text", text: `Async agent launched successfully.\nagentId: ${AGENT_ID}` },
+          ],
+        },
+      ],
+    },
+    toolUseResult: { isAsync: true, status: "async_launched", agentId: AGENT_ID },
+  });
+}
+
+function taskNotification(status: string): string {
+  return JSON.stringify({
+    type: "user",
+    sessionId: "replay-session",
+    timestamp: "2026-07-26T06:28:10.000Z",
+    message: {
+      role: "user",
+      content: `<task-notification>\n<task-id>${AGENT_ID}</task-id>\n<tool-use-id>${TOOL_USE_ID}</tool-use-id>\n<status>${status}</status>\n<summary>Agent finished</summary>\n</task-notification>`,
+    },
+  });
+}
+
 function sidechainEntry(options: { agentId?: string; stopReason?: string | null } = {}): string {
   return JSON.stringify({
     type: "assistant",
@@ -407,6 +441,33 @@ describe("ClaudeAgentSession persisted subagent replay", () => {
     expect(statuses).not.toContain("completed");
     expect(statuses).not.toContain("failed");
     expect(statuses).toContain("running");
+  });
+
+  test("keeps a background subagent running after its launch result", async () => {
+    writeSession({
+      parentLines: [taskToolUse(), backgroundLaunchResult()],
+      meta: JSON.stringify({ toolUseId: TOOL_USE_ID }),
+    });
+
+    const statuses = upserts(await replayDescriptors()).map((event) => event.status);
+    expect(statuses).not.toContain("completed");
+    expect(statuses).toContain("running");
+  });
+
+  test.each([
+    ["completed", "completed"],
+    ["failed", "failed"],
+    ["killed", "canceled"],
+  ])("finishes a background subagent from a %s task notification", async (status, expected) => {
+    writeSession({
+      parentLines: [taskToolUse(), backgroundLaunchResult(), taskNotification(status)],
+      meta: JSON.stringify({ toolUseId: TOOL_USE_ID }),
+    });
+
+    expect(upserts(await replayDescriptors()).at(-1)).toMatchObject({
+      id: TOOL_USE_ID,
+      status: expected,
+    });
   });
 
   test("finishes a Task subagent from its own end_turn when the parent outcome is missing", async () => {
