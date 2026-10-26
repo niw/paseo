@@ -14,7 +14,8 @@ import { tmpdir, userInfo } from "node:os";
 import { basename, delimiter, dirname, extname, join, resolve as resolvePath } from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { createExternalProcessEnv } from "../server/paseo-env.js";
+import { createExternalProcessEnv, type ProcessEnvRecord } from "../server/paseo-env.js";
+import { withoutClaudeParentSessionEnv } from "../server/agent/providers/claude/parent-session-env.js";
 import { writePrivateFileAtomicSync } from "../server/private-files.js";
 import {
   findExecutable,
@@ -180,6 +181,8 @@ function isTerminalActivityInterruptInput(data: string): boolean {
 
 interface BuildTerminalEnvironmentInput {
   shell: string;
+  /** The daemon environment the terminal inherits. Defaults to `process.env`. */
+  baseEnv?: ProcessEnvRecord;
   env: Record<string, string>;
   zshShellIntegrationDir?: string;
   paseoCliBinDir?: string | null;
@@ -517,7 +520,10 @@ function prepareZshShellIntegrationRuntimeDir(sourceDir = resolveZshShellIntegra
 export function buildTerminalEnvironment(
   input: BuildTerminalEnvironmentInput,
 ): Record<string, string> {
-  const baseEnv: Record<string, string> = createExternalProcessEnv(process.env, input.env, {
+  // A terminal is the user's own shell, so it never inherits the Claude Code session that
+  // may have started the daemon. Variables the terminal's own env sets still apply.
+  const inheritedEnv = withoutClaudeParentSessionEnv(input.baseEnv ?? process.env);
+  const baseEnv: Record<string, string> = createExternalProcessEnv(inheritedEnv, input.env, {
     TERM: "xterm-256color",
     TERM_PROGRAM: "kitty",
   });
