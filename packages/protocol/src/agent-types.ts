@@ -166,6 +166,8 @@ export interface AgentCapabilityFlags {
   supportsRewindConversation?: boolean;
   supportsRewindFiles?: boolean;
   supportsRewindBoth?: boolean;
+  /** The agent runs in a terminal that agent.terminal.start.request starts and returns. */
+  supportsTerminal?: boolean;
 }
 
 export interface AgentPersistenceHandle {

@@ -9,6 +9,9 @@ import { writtenDuringThisBoot } from "../server/pid-lock.js";
 import type { WorkerTerminalState } from "./terminal-worker-protocol.js";
 import type { TerminalActivity, TerminalActivityState } from "@getpaseo/protocol/terminal-activity";
 import { deriveTerminalActivityStatusBucket } from "@getpaseo/protocol/terminal-activity";
+import type { TerminalAgentSession } from "@getpaseo/protocol/messages";
+import { findClaudeSessionInProcessTree } from "./agent-session/claude.js";
+import { TerminalAgentSessionTracker } from "./agent-session/terminal-agent-session-tracker.js";
 import type {
   ClientMessage,
   ServerMessage,
@@ -29,6 +32,7 @@ import {
 import { reapTerminalWorkers } from "./terminal-worker-reaper.js";
 import {
   listTerminalWorkerRecords,
+  readTerminalWorkerRecord,
   terminalWorkerRecordPath,
   type TerminalWorkerRecord,
 } from "./terminal-worker-record.js";
@@ -103,7 +107,17 @@ interface WorkerTerminalRecord {
   commandFinishedListeners: Set<(info: TerminalCommandFinishedInfo) => void>;
   titleChangeListeners: Set<(title?: string) => void>;
   activityChangeListeners: Set<(transition: TerminalActivityTransition) => void>;
+  // Known only to the daemon that created the terminal: the worker protocol carries neither.
+  agentId?: string;
+  agentSessionTracker: TerminalAgentSessionTracker;
   session: TerminalSession;
+}
+
+/** What the creating daemon knows about a terminal that the worker does not keep. */
+interface DaemonTerminalFacts {
+  agentId?: string;
+  /** The environment the agent session lookup reads, such as `CLAUDE_CONFIG_DIR`. */
+  env?: Record<string, string>;
 }
 
 export interface TerminalCreateEnvironment {
@@ -121,6 +135,8 @@ interface WorkerTerminalManagerOptions {
   // The kill path. The daemon passes the reaper, which verifies every program is gone; the
   // default asks the connected worker to shut down.
   closeTerminals?: () => Promise<void>;
+  /** The pid of a terminal's program, which the worker publishes in its record. */
+  findTerminalProgramPid?: (terminalId: string) => Promise<number | null>;
 }
 
 /** The daemon's terminal manager: its terminals live in a worker that can outlive it. */
@@ -179,7 +195,10 @@ export function createWorkerTerminalManager(
   const terminalActivityTokenById = new Map<string, string>();
   // Creation owns a reference to the session independently of the live-terminal
   // index. Only terminalCreated registers it; terminalExit removes it permanently.
-  const pendingCreationsById = new Map<string, { session: TerminalSession | null }>();
+  const pendingCreationsById = new Map<
+    string,
+    { session: TerminalSession | null; facts: DaemonTerminalFacts }
+  >();
   const terminalsChangedListeners = new Set<TerminalsChangedListener>();
   const terminalActivityListeners = new Set<TerminalActivityListener>();
   const terminalWorkspaceContributionChangedListeners =
@@ -237,14 +256,41 @@ export function createWorkerTerminalManager(
         workspaceId: record.info.workspaceId,
         ...(record.info.title ? { title: record.info.title } : {}),
         activity: record.activity,
+        ...(record.agentSessionTracker.get()
+          ? { agentSession: record.agentSessionTracker.get() ?? undefined }
+          : {}),
+        ...(record.agentId ? { agentId: record.agentId } : {}),
       });
     }
     return terminals;
   }
 
+  // NOTE: The worker parses OSC 7501 but reports only the activity it derives, so any
+  // non-null activity, from program status or agent hooks, triggers the lookup. Plain shells
+  // have none and never run `ps`.
+  function createAgentSessionTracker(
+    terminalId: string,
+    facts: DaemonTerminalFacts,
+    getActivity: () => TerminalActivity | null,
+  ): TerminalAgentSessionTracker {
+    const env = { ...process.env, ...facts.env };
+    return new TerminalAgentSessionTracker({
+      isAgentReporting: () => getActivity() !== null,
+      findAgentSession: async () => {
+        const rootPid = await managerOptions.findTerminalProgramPid?.(terminalId);
+        if (!rootPid) {
+          return null;
+        }
+        const sessionId = await findClaudeSessionInProcessTree({ rootPid, env });
+        return sessionId ? { provider: "claude", sessionId } : null;
+      },
+    });
+  }
+
   function registerRecord(input: {
     info: RequiredWorkerTerminalInfo;
     state: WorkerTerminalState;
+    facts?: DaemonTerminalFacts;
   }): TerminalSession {
     const existing = recordsById.get(input.info.id);
     if (existing) {
@@ -264,8 +310,21 @@ export function createWorkerTerminalManager(
       commandFinishedListeners: new Set(),
       titleChangeListeners: new Set(),
       activityChangeListeners: new Set(),
+      ...(input.facts?.agentId ? { agentId: input.facts.agentId } : {}),
+      agentSessionTracker: undefined as unknown as TerminalAgentSessionTracker,
       session: undefined as unknown as TerminalSession,
     };
+    record.agentSessionTracker = createAgentSessionTracker(
+      input.info.id,
+      input.facts ?? {},
+      () => record.activity,
+    );
+    record.agentSessionTracker.onChange(() => {
+      emitTerminalsChanged({
+        cwd: record.info.cwd,
+        terminals: listTerminalItemsForCwd(record.info.cwd),
+      });
+    });
 
     const session: TerminalSession = {
       get id() {
@@ -279,6 +338,9 @@ export function createWorkerTerminalManager(
       },
       get workspaceId() {
         return record.info.workspaceId;
+      },
+      get agentId() {
+        return record.agentId;
       },
       send(message: ClientMessage): void {
         if (message.type === "resize") {
@@ -336,6 +398,14 @@ export function createWorkerTerminalManager(
       },
       getActivity(): TerminalActivity | null {
         return record.activity;
+      },
+      getAgentSession(): TerminalAgentSession | null {
+        return record.agentSessionTracker.get();
+      },
+      onAgentSessionChange(
+        listener: (agentSession: TerminalAgentSession | null) => void,
+      ): () => void {
+        return record.agentSessionTracker.onChange(listener);
       },
       setActivity(state: TerminalActivityState): void {
         record.activity = { state, changedAt: Date.now() };
@@ -397,6 +467,8 @@ export function createWorkerTerminalManager(
     const terminalIds = terminalIdsByCwd.get(record.info.cwd) ?? new Set<string>();
     terminalIds.add(record.info.id);
     terminalIdsByCwd.set(record.info.cwd, terminalIds);
+    // An adopted terminal may already run an agent.
+    record.agentSessionTracker.scheduleRefresh();
     return session;
   }
 
@@ -406,6 +478,7 @@ export function createWorkerTerminalManager(
       return undefined;
     }
     recordsById.delete(terminalId);
+    record.agentSessionTracker.dispose();
     terminalActivityTokenById.delete(terminalId);
     const terminalIds = terminalIdsByCwd.get(record.info.cwd);
     if (terminalIds) {
@@ -495,6 +568,7 @@ export function createWorkerTerminalManager(
     for (const listener of Array.from(record.commandFinishedListeners)) {
       listener(message.info);
     }
+    record.agentSessionTracker.scheduleRefresh();
   }
 
   function handleTerminalActivityChangeEvent(
@@ -513,6 +587,7 @@ export function createWorkerTerminalManager(
     for (const listener of Array.from(record.activityChangeListeners)) {
       listener(transition);
     }
+    record.agentSessionTracker.scheduleRefresh();
     emitTerminalActivityTransition({
       terminalId: record.info.id,
       name: record.info.name,
@@ -539,11 +614,12 @@ export function createWorkerTerminalManager(
   function handleWorkerEvent(message: TerminalWorkerToParentMessage): void {
     switch (message.type) {
       case "terminalCreated": {
+        const pendingCreation = pendingCreationsById.get(message.terminal.id);
         const session = registerRecord({
           info: asRequiredWorkerTerminalInfo(message.terminal),
           state: message.state,
+          ...(pendingCreation ? { facts: pendingCreation.facts } : {}),
         });
-        const pendingCreation = pendingCreationsById.get(message.terminal.id);
         if (pendingCreation) {
           pendingCreation.session = session;
         }
@@ -816,14 +892,24 @@ export function createWorkerTerminalManager(
       return sessions;
     },
 
-    async createTerminal(
-      options: WorkerCreateTerminalOptions & { workspaceId: string },
-    ): Promise<TerminalSession> {
+    async createTerminal({
+      agentId,
+      ...options
+    }: WorkerCreateTerminalOptions & {
+      workspaceId: string;
+      agentId?: string;
+    }): Promise<TerminalSession> {
       const terminalId = options.id ?? randomUUID();
       const activityToken = createActivityToken();
       const terminalActivityUrl = managerOptions.getTerminalActivityUrl?.() ?? null;
       terminalActivityTokenById.set(terminalId, activityToken);
-      const creation = { session: null as TerminalSession | null };
+      const creation = {
+        session: null as TerminalSession | null,
+        facts: {
+          ...(agentId ? { agentId } : {}),
+          ...(options.env ? { env: options.env } : {}),
+        },
+      };
       pendingCreationsById.set(terminalId, creation);
       try {
         const environment = resolveCreateEnvironment();
@@ -1186,6 +1272,16 @@ export async function startWorkerTerminalManager(
         ? { getTerminalActivityUrl: options.getTerminalActivityUrl }
         : {}),
       closeTerminals: closeAll,
+      findTerminalProgramPid: async (terminalId) => {
+        try {
+          const current = await readTerminalWorkerRecord(
+            terminalWorkerRecordPath(options.paseoHome, record.pid),
+          );
+          return current.terminals.find((entry) => entry.id === terminalId)?.pid ?? null;
+        } catch {
+          return null;
+        }
+      },
     });
     const count = await manager.adoptTerminals();
     if (count > 0) {

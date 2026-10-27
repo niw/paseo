@@ -34,8 +34,17 @@ import {
   type CaptureTerminalLinesResult,
 } from "./terminal-capture.js";
 import type { TerminalReplayOptions, TerminalReplayMetadata } from "./terminal-replay.js";
+import type { TerminalAgentSession } from "@getpaseo/protocol/messages";
 import { TerminalInputModeTracker } from "@getpaseo/protocol/terminal-input-mode";
 import { TerminalActivityTracker } from "./activity/terminal-activity-tracker.js";
+import {
+  PROGRAM_STATUS_OSC_CODE,
+  PROGRAM_STATUS_QUERY,
+  PROGRAM_STATUS_QUERY_REPLY,
+  ProgramStatusRecords,
+  parseProgramStatusReport,
+  type ProgramStatusActivity,
+} from "./activity/program-status.js";
 import type { TerminalActivity, TerminalActivityState } from "@getpaseo/protocol/terminal-activity";
 
 const require = createRequire(import.meta.url);
@@ -93,17 +102,22 @@ export interface TerminalSession {
   name: string;
   cwd: string;
   workspaceId: string;
+  /** The Paseo agent whose provider runs in this terminal. Only the daemon's sessions know it. */
+  agentId?: string;
   send(msg: ClientMessage): void;
   subscribe(listener: (msg: ServerMessage) => void): () => void;
   onExit(listener: (info: TerminalExitInfo) => void): () => void;
   onCommandFinished(listener: (info: TerminalCommandFinishedInfo) => void): () => void;
   onTitleChange(listener: (title?: string) => void): () => void;
   onActivityChange(listener: (transition: TerminalActivityTransition) => void): () => void;
+  onAgentSessionChange(listener: (agentSession: TerminalAgentSession | null) => void): () => void;
   getSize(): { rows: number; cols: number };
   hasOutput(): boolean;
   getReplayPreamble(): string;
   getTitle(): string | undefined;
   getActivity(): TerminalActivity | null;
+  /** The agent session running in the terminal. Only the daemon's sessions look it up. */
+  getAgentSession(): TerminalAgentSession | null;
   setActivity(state: TerminalActivityState): void;
   clearActivityAttention(): boolean;
   setTitle(title: string): void;
@@ -794,6 +808,8 @@ export async function createTerminal(
   let stateRevision = 0;
   const inputModeTracker = new TerminalInputModeTracker();
   const activityTracker = new TerminalActivityTracker();
+  const programStatusRecords = new ProgramStatusRecords();
+  let programActivity: ProgramStatusActivity = null;
   const activityChangeListeners = new Set<(transition: TerminalActivityTransition) => void>();
   let titleChangeSubscription: { dispose(): void } | null = null;
 
@@ -939,7 +955,48 @@ export async function createTerminal(
     });
   }
 
+  // Terminals without program status reports keep hook-driven activity untouched.
+  function refreshProgramActivity(): void {
+    const nextActivity = programStatusRecords.deriveActivity();
+    if (nextActivity === programActivity) {
+      return;
+    }
+    programActivity = nextActivity;
+    activityTracker.applyProgramActivity(nextActivity);
+  }
+
+  const disposeProgramStatusSubscription = terminal.parser.registerOscHandler(
+    PROGRAM_STATUS_OSC_CODE,
+    (data) => {
+      if (data === PROGRAM_STATUS_QUERY) {
+        ptyProcess.write(PROGRAM_STATUS_QUERY_REPLY);
+        return true;
+      }
+      const report = parseProgramStatusReport(data);
+      if (report) {
+        programStatusRecords.apply(report);
+        refreshProgramActivity();
+      }
+      return true;
+    },
+  );
+
+  // RIS removes every program status record. Returning false keeps xterm's own reset.
+  const disposeFullResetSubscription = terminal.parser.registerEscHandler({ final: "c" }, () => {
+    programStatusRecords.clear();
+    refreshProgramActivity();
+    return false;
+  });
+
   const disposeCommandLifecycleSubscription = terminal.parser.registerOscHandler(633, (data) => {
+    // NOTE: A shell prompt ends working and blocked program status records. Only the
+    // shell integration's OSC 633 prompt counts, because Claude Code emits OSC 133 A
+    // inside its own UI to mark turns.
+    if (data === "A") {
+      programStatusRecords.dropTransient();
+      refreshProgramActivity();
+      return true;
+    }
     const commandFinished = parseCommandFinishedOsc(data);
     if (!commandFinished) {
       return true;
@@ -1023,6 +1080,9 @@ export async function createTerminal(
     clearPendingTitleChange();
     disposeTitleChangeSubscription();
     disposeCommandLifecycleSubscription.dispose();
+    disposeProgramStatusSubscription.dispose();
+    disposeFullResetSubscription.dispose();
+    programStatusRecords.clear();
     activityTracker.dispose();
     terminal.dispose();
     listeners.clear();
@@ -1162,7 +1222,8 @@ export async function createTerminal(
 
     switch (msg.type) {
       case "input": {
-        if (isTerminalActivityInterruptInput(msg.data)) {
+        // A program reporting OSC 7501 status says itself when an interrupt stops it.
+        if (isTerminalActivityInterruptInput(msg.data) && programActivity === null) {
           activityTracker.interrupt();
         }
         pendingInput += msg.data;
@@ -1281,11 +1342,25 @@ export async function createTerminal(
     return toTerminalActivity(activityTracker.getSnapshot());
   }
 
+  // NOTE: The daemon looks up the agent session from the program's pid, so the worker's
+  // terminal reports none and never changes it.
+  function getAgentSession(): TerminalAgentSession | null {
+    return null;
+  }
+
+  function onAgentSessionChange(): () => void {
+    return () => {};
+  }
+
   function setActivity(state: TerminalActivityState): void {
     activityTracker.set(state);
   }
 
+  // A blocked program still waits for its answer, so focus does not mark it as seen.
   function clearActivityAttention(): boolean {
+    if (programActivity === "needs_input") {
+      return false;
+    }
     return activityTracker.clearAttention();
   }
 
@@ -1389,6 +1464,7 @@ export async function createTerminal(
     onCommandFinished,
     onTitleChange,
     onActivityChange,
+    onAgentSessionChange,
     getSize,
     serializeReplay,
     captureLines: (captureOptions) => captureTerminalLines(terminal.buffer.active, captureOptions),
@@ -1402,6 +1478,7 @@ export async function createTerminal(
     getReplayPreamble,
     getTitle,
     getActivity,
+    getAgentSession,
     setActivity,
     clearActivityAttention,
     setTitle,

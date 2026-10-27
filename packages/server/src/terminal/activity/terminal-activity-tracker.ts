@@ -2,6 +2,7 @@ import type {
   TerminalActivityAttentionReason,
   TerminalActivityState,
 } from "@getpaseo/protocol/terminal-activity";
+import type { ProgramStatusActivity } from "./program-status.js";
 
 export interface TerminalActivitySnapshot {
   state: TerminalActivityState | null;
@@ -45,6 +46,34 @@ export class TerminalActivityTracker {
     }
     this.setState("idle", null);
     return true;
+  }
+
+  /**
+   * Applies activity derived from OSC 7501 program status. Programs report unseen
+   * results as `done`, so `idle` after `working` is not finished attention.
+   * Finished attention stays until the user focuses the terminal.
+   */
+  applyProgramActivity(activity: ProgramStatusActivity): void {
+    switch (activity) {
+      case "working":
+        this.setState("working", null);
+        return;
+      case "needs_input":
+        this.setState("idle", "needs_input");
+        return;
+      case "finished":
+        this.setState("idle", "finished");
+        return;
+      case "idle":
+      case null: {
+        const keepsFinished = this.attentionReason === "finished";
+        this.setState(
+          keepsFinished || activity === "idle" ? "idle" : null,
+          keepsFinished ? "finished" : null,
+        );
+        return;
+      }
+    }
   }
 
   interrupt(): void {

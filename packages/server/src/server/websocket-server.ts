@@ -847,6 +847,10 @@ export class VoiceAssistantWebSocketServer {
         if (!reason) {
           return;
         }
+        // An agent that drives its own terminal, such as Claude (Terminal), notifies for it.
+        if (this.terminalManager?.getTerminal(event.terminalId)?.agentId) {
+          return;
+        }
         void this.broadcastTerminalAttention({
           terminalId: event.terminalId,
           cwd: event.cwd,
@@ -2858,6 +2862,7 @@ export class VoiceAssistantWebSocketServer {
     agentId: string;
     provider: AgentProvider;
     reason: "finished" | "error" | "permission";
+    message?: string;
   }): Promise<void> {
     const agent = this.agentManager.getAgent(params.agentId);
     if (!agent?.workspaceId) {
@@ -2894,6 +2899,7 @@ export class VoiceAssistantWebSocketServer {
       agentId: params.agentId,
       assistantMessage,
       permissionRequest: findLatestPermissionRequest(agent.pendingPermissions),
+      message: params.message,
     });
 
     const plan = computeNotificationPlan({
