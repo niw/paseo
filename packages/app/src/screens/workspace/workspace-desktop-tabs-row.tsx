@@ -21,6 +21,7 @@ import {
   Copy,
   Pencil,
   RotateCw,
+  Terminal,
   Columns2,
   Rows2,
   Ellipsis,
@@ -66,6 +67,8 @@ import {
   type WorkspaceTabMenuEntry,
   type WorkspaceTabMenuLabels,
 } from "@/screens/workspace/workspace-tab-menu";
+import { useOpenAgentTerminal } from "@/screens/workspace/use-open-workspace-terminal-tab";
+import { useCopyResumeCommand } from "@/screens/workspace/use-copy-resume-command";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { PaneHost } from "@/panels/panel-manifest";
 import type { WorkspaceTabLaunchPurpose } from "@/workspace-tabs/launcher";
@@ -129,6 +132,7 @@ const AGENT_TOOLTIP_TITLE_MAX_LENGTH = 80;
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedX = withUnistyles(X);
 const ThemedCopy = withUnistyles(Copy);
+const ThemedTerminal = withUnistyles(Terminal);
 
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedArrowLeftToLine = withUnistyles(ArrowLeftToLine);
@@ -427,6 +431,8 @@ function TabContextMenuItem({
 }) {
   const leading = useMemo(() => {
     switch (entry.icon) {
+      case "terminal":
+        return <ThemedTerminal size={16} uniProps={mutedColorMapping} />;
       case "copy":
         return <ThemedCopy size={16} uniProps={mutedColorMapping} />;
       case "rotate-cw":
@@ -1170,6 +1176,7 @@ function ResolvedWorkspaceDesktopTabsRow({
     () => ({
       copyResumeCommand: t("workspace.tabs.menu.copyResumeCommand"),
       copyAgentId: t("workspace.tabs.menu.copyAgentId"),
+      openTerminal: t("workspace.tabs.menu.openTerminal"),
       copyTerminalId: t("workspace.tabs.menu.copyTerminalId"),
       copyFilePath: t("workspace.tabs.menu.copyFilePath"),
       rename: t("workspace.tabs.menu.rename"),
@@ -1551,15 +1558,23 @@ function ResolvedDesktopTabChip({
 }) {
   const { t } = useTranslation();
   const presentation = item.presentation;
+  const terminalAgentSession = presentation.agentSession;
+  const hasAgentTerminal = presentation.hasAgentTerminal;
+  const onCopyTerminalResumeCommand = useCopyResumeCommand();
+  const onOpenAgentTerminal = useOpenAgentTerminal(serverId, workspaceId);
   const resolvedTab = useMemo(
     () =>
       buildWorkspaceDesktopTabActions({
         tab: item.tab,
         index,
         tabCount,
+        hasAgentTerminal,
+        onOpenAgentTerminal,
         onCopyResumeCommand,
         onCopyAgentId,
         onCopyTerminalId,
+        terminalAgentSession,
+        onCopyTerminalResumeCommand,
         onCopyFilePath,
         onReloadAgent,
         onRenameTab,
@@ -1570,6 +1585,8 @@ function ResolvedDesktopTabChip({
         labels,
       }),
     [
+      hasAgentTerminal,
+      onOpenAgentTerminal,
       index,
       item.tab,
       onCloseOtherTabs,
@@ -1578,6 +1595,8 @@ function ResolvedDesktopTabChip({
       onCloseTabsToRight,
       onCopyAgentId,
       onCopyTerminalId,
+      terminalAgentSession,
+      onCopyTerminalResumeCommand,
       onCopyFilePath,
       onCopyResumeCommand,
       labels,

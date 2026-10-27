@@ -369,6 +369,7 @@ export type AgentAttentionCallback = (params: {
   reason: "finished" | "error" | "permission";
   /** When the agent's current unread attention started; null when the agent is read. */
   attentionTimestamp: Date | null;
+  message?: string;
 }) => void;
 
 export type AgentArchivedCallback = (agentId: string) => Promise<void> | void;
@@ -728,6 +729,16 @@ function normalizePersistenceForConfig(
       ...(config.mcpServers ? { mcpServers: config.mcpServers } : {}),
     },
   };
+}
+
+interface AgentSessionOpening {
+  reason: PluginSessionOpenRequest["reason"];
+  purpose: PluginSessionOpenRequest["purpose"];
+  workspaceId?: string | null;
+  title?: string | null;
+  background?: boolean;
+  labels?: Record<string, string>;
+  metadata?: AgentMetadata;
 }
 
 interface SubscriptionRecord {
@@ -3027,6 +3038,16 @@ export class AgentManager {
       throw new Error(`Agent not found in storage after detach: ${agentId}`);
     }
     return { record: result.record, live: false, previousParentAgentId };
+  }
+
+  /** Starts the terminal the agent runs in unless it runs, and returns its ID. */
+  async startAgentTerminal(agentId: string): Promise<string> {
+    const agent = this.requireSessionAgent(agentId);
+    if (!agent.session.capabilities.supportsTerminal || !agent.session.startTerminal) {
+      throw new Error(`Agent '${agentId}' does not run in a terminal`);
+    }
+    const terminal = await agent.session.startTerminal();
+    return terminal.id;
   }
 
   notifyAgentState(agentId: string): void {
@@ -5677,6 +5698,9 @@ export class AgentManager {
   }): Promise<void> | undefined {
     const { agent, event, options, isForegroundEvent, eventTurnId, terminalDisposition, flags } =
       params;
+    if (this.dispatchProviderNoticeEvent({ agent, event, flags })) {
+      return undefined;
+    }
     switch (event.type) {
       case "thread_started":
         this.onStreamThreadStarted(agent);
@@ -5760,6 +5784,46 @@ export class AgentManager {
       default:
         return undefined;
     }
+  }
+
+  /**
+   * Handles what a provider reports about its session outside a turn's timeline: the history
+   * changed outside Paseo, or the session needs the user. Returns whether it handled the event.
+   */
+  private dispatchProviderNoticeEvent(params: {
+    agent: ActiveManagedAgent;
+    event: AgentStreamEvent;
+    flags: StreamEventFlags;
+  }): boolean {
+    const { agent, event, flags } = params;
+    switch (event.type) {
+      case "history_reset":
+        flags.shouldDispatchEvent = false;
+        void this.replaceTimelineFromProvider(agent).catch((error: unknown) => {
+          this.logger.warn({ err: error, agentId: agent.id }, "Failed to rebuild the timeline");
+        });
+        return true;
+      case "attention_required":
+        this.onStreamAttentionRequired(agent, event, flags);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  // Rebuilds the timeline like a rewind from Paseo does, for a history that changed outside it.
+  private async replaceTimelineFromProvider(agent: ActiveManagedAgent): Promise<void> {
+    await this.hydrateTimelineFromProvider(agent.id, {
+      force: true,
+      broadcast: true,
+      broadcastTimeline: false,
+    });
+    this.dispatch({
+      type: "timeline_replacement",
+      agentId: agent.id,
+      epoch: this.timelineStore.getEpoch(agent.id),
+    });
+    await this.persistSnapshot(agent);
   }
 
   private onStreamThreadStarted(agent: ActiveManagedAgent): void {
@@ -6006,6 +6070,18 @@ export class AgentManager {
       this.broadcastAgentAttention(agent, "permission");
     }
     this.emitState(agent);
+  }
+
+  // The broadcast carries the attention to clients, so the provider's event is not dispatched.
+  private onStreamAttentionRequired(
+    agent: ActiveManagedAgent,
+    event: Extract<AgentStreamEvent, { type: "attention_required" }>,
+    flags: StreamEventFlags,
+  ): void {
+    flags.shouldDispatchEvent = false;
+    if (!agent.internal) {
+      this.broadcastAgentAttention(agent, event.reason, event.message);
+    }
   }
 
   private onStreamPermissionResolved(params: {
@@ -6403,6 +6479,7 @@ export class AgentManager {
   private broadcastAgentAttention(
     agent: ManagedAgent,
     reason: "finished" | "error" | "permission",
+    message?: string,
   ): void {
     if (isDelegatedAgent(agent)) {
       return;
@@ -6415,6 +6492,7 @@ export class AgentManager {
       attentionTimestamp: agent.attention.requiresAttention
         ? agent.attention.attentionTimestamp
         : null,
+      ...(message ? { message } : {}),
     });
   }
 
@@ -6667,54 +6745,24 @@ export class AgentManager {
     cwd: string,
     paseoToolPolicy: ProviderPaseoToolsPolicy | undefined,
     env?: Record<string, string>,
-    opening?: {
-      reason: PluginSessionOpenRequest["reason"];
-      purpose: PluginSessionOpenRequest["purpose"];
-      workspaceId?: string | null;
-      title?: string | null;
-      background?: boolean;
-      labels?: Record<string, string>;
-      metadata?: AgentMetadata;
-    },
+    opening?: AgentSessionOpening,
   ): Promise<AgentLaunchContext> {
-    let appendSystemPrompt: string[] | undefined;
-    let mcpServers: AgentSessionConfig["mcpServers"];
-    let mcpServerOwners: Record<string, string> | undefined;
-    let wrap: AgentLaunchContext["wrap"];
-    if (this.pluginSessions) {
-      const request = {
-        agentId,
-        provider: client.provider,
-        cwd,
-        workspaceId: opening?.workspaceId ?? null,
-        reason: opening?.reason ?? "resume",
-        purpose: opening?.purpose ?? "interactive",
-        env: { ...env },
-        title: opening?.title ?? null,
-        background: opening?.background === true,
-        ...agentEntityData(opening),
-        tools: [],
-        mcpServers: {},
-      };
-      const transformed = await this.pluginSessions.openSession(request);
-      env = transformed.env;
-      wrap = transformed.wrap;
-      if (request.purpose === "interactive") {
-        appendSystemPrompt = transformed.appendSystemPrompt;
-        mcpServers = transformed.mcpServers;
-        mcpServerOwners = transformed.mcpServerOwners;
-      }
-      // launchAgent discards this open when the wrap is refused, so a running session keeps its tools.
-      if (wrap) await requireLaunchWrap(client);
-    }
+    const { mcpServers, mcpServerOwners, ...opened } = await this.openPluginSession(
+      agentId,
+      client,
+      cwd,
+      env,
+      opening,
+    );
     const context: AgentLaunchContext = {
       agentId,
-      wrap,
-      ...pluginPromptContext(appendSystemPrompt),
+      wrap: opened.wrap,
+      ...pluginPromptContext(opened.appendSystemPrompt),
       mcpServers,
       mcpServerOwners,
+      ...(opening?.workspaceId ? { workspaceId: opening.workspaceId } : {}),
       env: {
-        ...env,
+        ...opened.env,
         ...agentIdentityEnv({ agentId, cwd, opening }),
       },
     };
@@ -6734,6 +6782,52 @@ export class AgentManager {
       if (useNativeTools) context.paseoTools = catalog;
     }
     return context;
+  }
+
+  private async openPluginSession(
+    agentId: string,
+    client: AgentClient,
+    cwd: string,
+    env: Record<string, string> | undefined,
+    opening: AgentSessionOpening | undefined,
+  ): Promise<{
+    env: Record<string, string> | undefined;
+    wrap?: AgentLaunchContext["wrap"];
+    appendSystemPrompt?: string[];
+    mcpServers?: AgentSessionConfig["mcpServers"];
+    mcpServerOwners?: Record<string, string>;
+  }> {
+    if (!this.pluginSessions) {
+      return { env };
+    }
+    const request = {
+      agentId,
+      provider: client.provider,
+      cwd,
+      workspaceId: opening?.workspaceId ?? null,
+      reason: opening?.reason ?? "resume",
+      purpose: opening?.purpose ?? "interactive",
+      env: { ...env },
+      title: opening?.title ?? null,
+      background: opening?.background === true,
+      ...agentEntityData(opening),
+      tools: [],
+      mcpServers: {},
+    };
+    const transformed = await this.pluginSessions.openSession(request);
+    const { wrap } = transformed;
+    // launchAgent discards this open when the wrap is refused, so a running session keeps its tools.
+    if (wrap) await requireLaunchWrap(client);
+    if (request.purpose !== "interactive") {
+      return { env: transformed.env, wrap };
+    }
+    return {
+      env: transformed.env,
+      wrap,
+      appendSystemPrompt: transformed.appendSystemPrompt,
+      mcpServers: transformed.mcpServers,
+      mcpServerOwners: transformed.mcpServerOwners,
+    };
   }
 
   private resolveProviderLaunchConfig(
