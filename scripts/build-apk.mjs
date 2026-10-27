@@ -1,4 +1,4 @@
-import { spawnSync, execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -19,11 +19,6 @@ const env = {
   APP_VARIANT: "production",
   PASEO_WATCHDOG_BUILD: "1",
   PASEO_DIAGNOSTIC_BUILD_TIME: new Date().toISOString(),
-  PASEO_DIAGNOSTIC_REVISION:
-    execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: root, encoding: "utf8" }).trim() +
-    (execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).trim()
-      ? "-dirty"
-      : ""),
 };
 function run(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, env, stdio: "inherit" });

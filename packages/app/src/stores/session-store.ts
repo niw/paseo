@@ -289,6 +289,7 @@ export interface DaemonServerInfo {
   serverId: string;
   hostname: string | null;
   version: string | null;
+  commit?: string;
   desktopManaged?: boolean;
   capabilities?: ServerCapabilities;
   features?: ServerInfoStatusPayload["features"];
@@ -299,6 +300,7 @@ export function toDaemonServerInfo(serverInfo: ServerInfoStatusPayload): DaemonS
     serverId: serverInfo.serverId,
     hostname: serverInfo.hostname ?? null,
     version: serverInfo.version ?? null,
+    ...(serverInfo.commit ? { commit: serverInfo.commit } : {}),
     ...(serverInfo.desktopManaged !== undefined
       ? { desktopManaged: serverInfo.desktopManaged }
       : {}),
@@ -782,6 +784,7 @@ function isSessionServerInfoUnchanged(input: {
   currentServerInfo: SessionState["serverInfo"] | undefined;
   nextHostname: string | null;
   nextVersion: string | null;
+  nextCommit: string | undefined;
   nextDesktopManaged: boolean | undefined;
   nextCapabilities: ServerCapabilities | undefined;
   nextFeatures: ServerInfoStatusPayload["features"] | undefined;
@@ -791,6 +794,7 @@ function isSessionServerInfoUnchanged(input: {
     currentServerInfo,
     nextHostname,
     nextVersion,
+    nextCommit,
     nextDesktopManaged,
     nextCapabilities,
     nextFeatures,
@@ -801,6 +805,7 @@ function isSessionServerInfoUnchanged(input: {
     currentServerInfo?.serverId === input.nextServerId &&
     prevHostname === nextHostname &&
     prevVersion === nextVersion &&
+    currentServerInfo?.commit === nextCommit &&
     currentServerInfo?.desktopManaged === nextDesktopManaged &&
     areServerCapabilitiesEqual(currentServerInfo?.capabilities, nextCapabilities) &&
     areServerInfoFeaturesEqual(currentServerInfo?.features, nextFeatures)
@@ -938,6 +943,7 @@ export const useSessionStore = create<SessionStore>()(
 
           const nextHostname = info.hostname?.trim() || null;
           const nextVersion = info.version?.trim() || null;
+          const nextCommit = info.commit;
           const nextDesktopManaged = info.desktopManaged;
           const nextCapabilities = info.capabilities;
           const nextFeatures = info.features;
@@ -947,6 +953,7 @@ export const useSessionStore = create<SessionStore>()(
               currentServerInfo: session.serverInfo,
               nextHostname,
               nextVersion,
+              nextCommit,
               nextDesktopManaged,
               nextCapabilities,
               nextFeatures,
@@ -966,6 +973,7 @@ export const useSessionStore = create<SessionStore>()(
                   serverId: info.serverId,
                   hostname: nextHostname,
                   version: nextVersion,
+                  ...(nextCommit ? { commit: nextCommit } : {}),
                   ...(nextDesktopManaged !== undefined
                     ? { desktopManaged: nextDesktopManaged }
                     : {}),
