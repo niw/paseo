@@ -188,6 +188,15 @@ export function formatVersionWithPrefix(version: string | null | undefined): str
   return value.startsWith("v") ? value : `v${value}`;
 }
 
+/** A version with the commit it was built from, such as `v0.13.0 (0cc3805)`. */
+export function formatVersionWithCommit(
+  version: string | null | undefined,
+  commit: string | null | undefined,
+): string {
+  const text = formatVersionWithPrefix(version);
+  return commit ? `${text} (${commit})` : text;
+}
+
 export function buildMacAppleSiliconDownloadUrl(version: string | null | undefined): string | null {
   const normalizedVersion = normalizeVersionForComparison(version);
   if (!normalizedVersion) {

@@ -14,6 +14,11 @@ function toVersionOrNull(value: unknown): string | null {
   return trimmed;
 }
 
+/** The commit this bundle was built from, recorded by app.config.js. */
+export function resolveAppCommit(): string | null {
+  return toVersionOrNull(Constants.expoConfig?.extra?.buildCommit);
+}
+
 export function resolveAppVersion(): string | null {
   const packageVersion = toVersionOrNull(appPackage?.version);
   if (packageVersion) {
