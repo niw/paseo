@@ -2689,3 +2689,64 @@ it.skipIf(isPlatform("win32"))(
   },
   30000,
 );
+
+// A Claude Code stand-in run from a shell, so the session lookup walks the process tree. It
+// writes the session file Claude Code keeps, reports status, and exits on any key.
+const FAKE_CLAUDE_SCRIPT = `
+const fs = require("node:fs");
+const path = require("node:path");
+const sessionsDir = path.join(process.env.CLAUDE_CONFIG_DIR, "sessions");
+fs.mkdirSync(sessionsDir, { recursive: true });
+fs.writeFileSync(
+  path.join(sessionsDir, process.pid + ".json"),
+  JSON.stringify({ pid: process.pid, sessionId: "worker-claude-session" }),
+);
+process.stdin.setRawMode(true);
+process.stdin.resume();
+process.stdin.on("data", () => {
+  process.stdout.write("\\x1b]7501;state=clear\\x1b\\\\");
+  process.exit(0);
+});
+process.stdout.write("\\x1b]7501;state=idle:app=claude-code\\x1b\\\\");
+`;
+
+it.skipIf(isPlatform("win32"))(
+  "looks up the Claude Code session running in a worker terminal from the daemon",
+  async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "worker-terminal-manager-agent-session-"));
+    temporaryDirs.push(cwd);
+    const scriptPath = join(cwd, "fake-claude.cjs");
+    writeFileSync(scriptPath, FAKE_CLAUDE_SCRIPT);
+    manager = await startRealWorkerManager();
+    const listed: Array<{ agentId?: string; sessionId: string | null }> = [];
+    manager.subscribeTerminalsChanged((event) => {
+      const [item] = event.terminals;
+      if (item)
+        listed.push({ agentId: item.agentId, sessionId: item.agentSession?.sessionId ?? null });
+    });
+    const session = trackTerminal(
+      await manager.createTerminal({
+        workspaceId: "ws-test",
+        cwd,
+        agentId: "agent-1",
+        env: { CLAUDE_CONFIG_DIR: join(cwd, "claude-config") },
+        command: "/bin/sh",
+        args: ["-c", `"${process.execPath}" "${scriptPath}"; exec sleep 600`],
+      }),
+    );
+
+    await waitForCondition(() => session.getAgentSession() !== null, 10000);
+
+    expect(session.agentId).toBe("agent-1");
+    expect(session.getAgentSession()).toEqual({
+      provider: "claude",
+      sessionId: "worker-claude-session",
+    });
+    expect(listed).toContainEqual({ agentId: "agent-1", sessionId: "worker-claude-session" });
+
+    session.send({ type: "input", data: "q" });
+    await waitForCondition(() => session.getAgentSession() === null, 10000);
+
+    expect(listed.at(-1)).toEqual({ agentId: "agent-1", sessionId: null });
+  },
+);
