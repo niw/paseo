@@ -332,6 +332,7 @@ describe("resolveMessageInputEnterAction", () => {
       shiftKey: false,
       metaKey: false,
       ctrlKey: false,
+      altKey: false,
       isAgentRunning: false,
       onQueue: () => undefined,
       ...overrides,
@@ -362,6 +363,24 @@ describe("resolveMessageInputEnterAction", () => {
         enterContext({ sendShortcut: "mod-enter", submitOnEnter: false }),
       ),
     ).toBeNull();
+  });
+
+  it("inserts a newline on Option/Alt+Enter with either send shortcut", () => {
+    for (const sendShortcut of ["enter", "mod-enter"] as const) {
+      expect(resolveMessageInputEnterAction(enterContext({ sendShortcut, altKey: true }))).toBe(
+        "newline",
+      );
+      expect(
+        resolveMessageInputEnterAction(
+          enterContext({ sendShortcut, altKey: true, metaKey: true, isAgentRunning: true }),
+        ),
+      ).toBe("newline");
+      expect(
+        resolveMessageInputEnterAction(
+          enterContext({ sendShortcut, altKey: true, shiftKey: true, ctrlKey: true }),
+        ),
+      ).toBe("newline");
+    }
   });
 
   it("sends on plain Enter when Enter sends", () => {
