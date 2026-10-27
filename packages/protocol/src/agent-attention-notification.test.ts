@@ -71,6 +71,21 @@ describe("buildAgentAttentionNotificationPayload", () => {
     });
   });
 
+  it("uses the message when no permission request describes the attention", () => {
+    const payload = buildAgentAttentionNotificationPayload({
+      reason: "permission",
+      serverId: "srv-2",
+      workspaceId: "workspace-2",
+      agentId: "agent-2",
+      permissionRequest: null,
+      message: "Claude Code is waiting for you in its terminal: choose: retry or edit",
+    });
+
+    expect(payload.body).toBe(
+      "Claude Code is waiting for you in its terminal: choose: retry or edit",
+    );
+  });
+
   it("uses error-specific defaults when reason is error", () => {
     const payload = buildAgentAttentionNotificationPayload({
       reason: "error",

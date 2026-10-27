@@ -10,6 +10,7 @@ import {
   Ellipsis,
   Pencil,
   RotateCw,
+  Terminal,
   X,
 } from "lucide-react-native";
 import {
@@ -25,6 +26,7 @@ import type { Theme } from "@/styles/theme";
 
 const ThemedEllipsis = withUnistyles(Ellipsis);
 const ThemedCopy = withUnistyles(Copy);
+const ThemedTerminal = withUnistyles(Terminal);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedArrowLeftToLine = withUnistyles(ArrowLeftToLine);
 const ThemedArrowRightToLine = withUnistyles(ArrowRightToLine);
@@ -48,6 +50,8 @@ function MobileTabDropdownMenuItem({
 }) {
   const leading = useMemo(() => {
     switch (entry.icon) {
+      case "terminal":
+        return <ThemedTerminal size={16} uniProps={mutedColorMapping} />;
       case "copy":
         return <ThemedCopy size={16} uniProps={mutedColorMapping} />;
       case "rotate-cw":

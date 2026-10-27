@@ -315,6 +315,8 @@ describe("runWorktreeAutoTerminals", () => {
           getSize: () => ({ rows: 1, cols: 1 }),
           getTitle: () => undefined,
           getActivity: () => null,
+          getAgentSession: () => null,
+          onAgentSessionChange: () => () => {},
           setActivity: () => {},
           getExitInfo: () => null,
           killAndWait: async () => {},
