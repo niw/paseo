@@ -37,6 +37,13 @@ describe("desktop-updates helpers", () => {
     expect(formatVersionWithPrefix(null)).toBe("\u2014");
   });
 
+  it("formats display versions with the commit they were built from", async () => {
+    const { formatVersionWithCommit } = await loadModuleForPlatform("web");
+
+    expect(formatVersionWithCommit("0.13.0", "0cc3805")).toBe("v0.13.0 (0cc3805)");
+    expect(formatVersionWithCommit("0.13.0", null)).toBe("v0.13.0");
+  });
+
   it("parses valid local daemon version result", async () => {
     const { parseLocalDaemonVersionResult } = await loadModuleForPlatform("web");
 
