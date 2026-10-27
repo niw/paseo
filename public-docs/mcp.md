@@ -72,6 +72,105 @@ voice-only `speak` tool is separate from this policy.
 This setting limits the catalog presented to an agent. It is not a security boundary for an agent
 that can access the host through a shell.
 
+## MCP gateway
+
+The MCP gateway is an MCP server that drives agents on several daemons. It is not the Paseo daemon and runs no agents. It connects to each daemon as an ordinary client, the way the app or CLI does, so it works with any daemon you can reach with `--host`, including over the relay with a pairing URL. Run it on any machine, such as a small server that agents on other machines can reach.
+
+Add the daemons it may reach. `add` connects once to pin each daemon's server ID:
+
+```sh
+paseo mcp host add 'https://app.paseo.sh/#offer=...' --label laptop
+paseo mcp host add 'ssh://deploy@build-box' --label build-box
+paseo mcp host ls
+```
+
+Connections are saved in `<home>/mcp-gateway.json` with mode `0600`. They are credentials: anyone who can read the file can reach those daemons with the authority of the connection.
+
+A running gateway picks up hosts you add or remove without a restart. It rereads the file when a caller lists hosts or names a server ID it does not know, so the next `list_hosts` after `paseo mcp host add` shows the new host.
+
+Every gateway tool but `list_hosts` takes a `serverId` from `list_hosts`; there is no default host. Besides the [tools](#tools) agents get, the gateway serves what a remote caller would otherwise need a shell on the host for: git status, diffs, commits, pushes and pull requests through the checkout tools, and `list_directory` and `read_file`. Paths are absolute on the host. Tools that share a name with an agent tool behave like it, with these differences:
+
+- `create_agent` needs an existing `workspaceId` and an explicit provider/model.
+- The gateway delivers no finish notifications. Call `wait_for_agent`, which returns `timeout` while the agent is still working.
+- `kill_agent` is not available; use `archive_agent`.
+- `create_terminal` needs a `workspaceId`, and `send_terminal_keys` encodes keys for the default input mode.
+- `create_schedule` takes either `provider` and `cwd` to start a new agent per run, or `agentId` to prompt an existing agent. Heartbeats are not available.
+
+| Permission          | Tools                                                                                                                                                                                                                                                                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspace.read`    | `list_projects`, `list_workspaces`, `list_workspace_scripts`, `list_agents`, `get_agent_status`, `get_agent_activity`, `wait_for_agent`, `list_pending_permissions`, `list_terminals`, `capture_terminal`, `get_checkout_status`, `get_checkout_diff`, `get_pull_request_status`, `list_directory`, `read_file`                        |
+| `workspace.write`   | `create_agent`, `send_agent_prompt`, `update_agent`, `set_agent_mode`, `cancel_agent`, `archive_agent`, `respond_to_permission`, `start_workspace_script`, `stop_workspace_script`, `create_terminal`, `send_terminal_keys`, `kill_terminal`, `commit_changes`, `pull_changes`, `push_changes`, `switch_branch`, `create_pull_request` |
+| `workspace.manage`  | `create_workspace`, `rename_workspace`, `archive_workspace`                                                                                                                                                                                                                                                                            |
+| `automation.manage` | `create_schedule`, `update_schedule`, `list_schedules`, `inspect_schedule`, `schedule_logs`, `run_schedule_once`, `pause_schedule`, `resume_schedule`, `delete_schedule`                                                                                                                                                               |
+| `daemon.read`       | `list_providers`, `list_models`, `list_profiles`, `inspect_provider`                                                                                                                                                                                                                                                                   |
+
+`list_hosts` needs no permission. The permissions apply to HTTP callers; `paseo mcp serve` (stdio) gets every tool.
+
+Each tool carries MCP annotations. Read tools are marked read-only, and tools that cancel, archive, kill or delete are marked destructive, so a client can approve reads automatically and ask before the rest.
+
+The full tool list costs several thousand tokens of context. To serve fewer tools, list them with `paseo mcp serve --tools list_agents,create_agent` or in the URL, `https://<hostname>/mcp/agents?tools=list_agents,create_agent`. `list_hosts` is always included, and an unknown name is an error.
+
+### Exec mode
+
+`paseo mcp serve --mode exec`, or `?mode=exec` in the URL, serves every tool through one tool, `paseo`. Its definition costs a few hundred tokens instead of several thousand. The agent sends one command per call:
+
+| Command  | Arguments                 | Result                                                     |
+| -------- | ------------------------- | ---------------------------------------------------------- |
+| `tools`  |                           | Every tool's name, title and effect                        |
+| `search` | `query`                   | Tools whose name, title or description contains every word |
+| `info`   | `tool`                    | The tool's description and JSON input schema               |
+| `call`   | `tool`, `args`, `confirm` | The tool's result                                          |
+
+A destructive tool runs only with `confirm: true`. Permissions, `hosts` and `?tools=` apply as in the default mode. Use exec mode with clients that load every tool definition up front. A client that loads tool schemas on demand, such as Claude Code, can keep the default mode and approve tools one by one.
+
+### Serve agents on other machines
+
+Remote agents reach the gateway over HTTP behind [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/). Access authenticates the caller. The gateway verifies the JWT Access attaches to each request and decides what the caller may do. Add an `http` section to `mcp-gateway.json`:
+
+```json
+{
+  "hosts": [
+    {
+      "serverId": "<server ID>",
+      "label": "laptop",
+      "connection": "https://app.paseo.sh/#offer=..."
+    }
+  ],
+  "http": {
+    "listen": "127.0.0.1:6769",
+    "cloudflareAccess": {
+      "teamDomain": "example.cloudflareaccess.com",
+      "aud": ["<Access application audience tag>"]
+    },
+    "principals": [
+      { "email": "you@example.com", "permissions": ["workspace.read", "workspace.write"] },
+      {
+        "commonName": "<service token client ID>",
+        "permissions": ["workspace.read"],
+        "hosts": ["<server ID>"]
+      }
+    ]
+  }
+}
+```
+
+1. Create an Access application for the public hostname and copy its audience tag into `aud`.
+2. Point the cloudflared ingress rule for that hostname at the `listen` address.
+3. Run `paseo mcp daemon start` to keep the gateway running in the background, or `paseo mcp daemon run` to run it in the foreground. `paseo mcp daemon status` shows its listener and log, and `paseo mcp daemon stop` stops it. The log, `<home>/mcp-gateway.log`, rotates at 10 MB and keeps three files, like `daemon.log`. A home runs one HTTP gateway at a time.
+4. Configure the remote agent's MCP server URL as `https://<hostname>/mcp/agents`.
+
+The listener serves only `/mcp/agents`, the same path as the daemon's Agent MCP, and rejects any request without a valid `Cf-Access-Jwt-Assertion` header. An identity Access lets through but `principals` does not list gets `403`. Restart the gateway (`paseo mcp daemon restart`) after changing the `http` section. A principal that names an unknown host or reaches no tool stops it from starting.
+
+Each principal's `permissions` decide which tools it sees, following the table above, and `hosts` limits which daemons it reaches; omit `hosts` for every daemon. A host outside the list looks unknown to the caller. Each daemon also limits the gateway to the authority of its saved connection.
+
+### Serve one local agent
+
+`paseo mcp serve` serves the MCP client that launched it over stdin and stdout, with every tool on every host. Use it in an MCP client configuration on the gateway machine:
+
+```json
+{ "command": "paseo", "args": ["mcp", "serve"] }
+```
+
 ## Mental model
 
 Workspaces decide where work happens; agent parentage decides who owns the work.
