@@ -86,6 +86,25 @@ JSON 输出不会包含连接凭据。
 只有确认目标已改变后，才应同时使用 `--replace-identity` 和 `--connection`。
 `rm` 删除已保存的连接；该主机上的 Agent 和工作区会继续运行。
 
+## MCP 网关 {#mcp-gateway}
+
+`paseo mcp` 运行一个本地 MCP 网关，用来驱动多个 daemon 上的 Agent。它在 `<home>/mcp-gateway.json` 中维护自己的主机列表，与任何 daemon 的已连接主机分开。`--host` 不适用；用 `--config <path>` 选择其他文件。
+
+```sh
+paseo mcp host add 'https://app.paseo.sh/#offer=...' --label laptop
+paseo mcp host ls
+paseo mcp host rm <server-id>
+paseo mcp serve            # stdio, for the MCP client that launches it
+paseo mcp serve --tools list_agents,create_agent
+paseo mcp serve --mode exec
+paseo mcp daemon start     # HTTP behind Cloudflare Access, in the background
+paseo mcp daemon status
+paseo mcp daemon stop
+paseo mcp daemon run       # the same HTTP gateway in the foreground
+```
+
+工具、HTTP 配置和权限见 [MCP 网关](/docs/mcp#mcp-gateway)。
+
 ## Provider 诊断 {#provider-diagnostics}
 
 让 daemon 检查它实际使用的 Provider 环境：

@@ -54,6 +54,14 @@ A delegating principal can grant only authority it already possesses. A session 
 
 Workspace-scoped grants require every resource-bearing operation and outbound observation to enforce the same workspace boundary. File preview currently accepts any daemon-readable regular file, so it must gain resource enforcement before workspace-specific access ships.
 
+## MCP gateway callers
+
+The MCP gateway (`packages/server/src/server/mcp-gateway/`) is a separate process, not a daemon. It reaches each daemon as an ordinary client, so a daemon sees one principal: the one its saved connection authenticates as. The gateway cannot forward a caller's identity, so it enforces caller permissions itself, before any RPC leaves it.
+
+Cloudflare Access authenticates remote callers. The gateway verifies the Access JWT and maps its `email` or `common_name` claim to a principal in its own config. Those principals live in config, not in a credential store, because Access already owns sign-in and revocation. Tools are classified against the same permissions as RPCs in `mcp-gateway/tool-policy.ts`, keyed by every gateway tool so a new tool fails typecheck until it is classified. A principal's `hosts` list hides other daemons entirely: an unlisted server ID reads as unknown.
+
+The gateway uses its own client ID. A daemon resumes the existing session when one principal reconnects with the same client ID, so sharing the CLI's ID would let the two take over each other's sessions.
+
 ## Hub
 
 The Hub authenticates as a service principal. Its locally selected grants decide whether it may execute agents, manage the daemon, manage tunnels, or manage access.
