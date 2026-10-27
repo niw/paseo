@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule } from "expo-modules-core";
 import Constants from "expo-constants";
-import { resolveAppVersion } from "@/utils/app-version";
+import { resolveAppCommit, resolveAppVersion } from "@/utils/app-version";
 import { createRecorder } from "./internal/recorder";
 
 interface NativeRecorder {
@@ -26,7 +26,7 @@ export function startWatchdog(): void {
   started = true;
   const heartbeatMs = native.startRecorder({
     version: resolveAppVersion() ?? "unknown",
-    build: String(Constants.expoConfig?.extra?.diagnosticRevision ?? "unknown"),
+    build: resolveAppCommit() ?? "unknown",
     builtAt: String(Constants.expoConfig?.extra?.diagnosticBuildTime ?? "unknown"),
     reactProfiling: "true",
   });

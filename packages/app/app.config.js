@@ -1,3 +1,4 @@
+const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const pkg = require("./package.json");
@@ -98,6 +99,28 @@ const variants = {
 const variant = variants[appVariant] ?? variants.production;
 const nativeReleaseVersion = getNativeReleaseVersion(pkg.version);
 
+/**
+ * The commit the bundle is built from, such as `0cc3805-dirty`. Unknown without git.
+ *
+ * NOTE: Web bundles inline the manifest when Metro transforms expo-constants, and Metro's cache
+ * key ignores the manifest. A cached export keeps an old commit, so `build:desktop` passes
+ * `--clear`.
+ */
+function resolveBuildCommit() {
+  try {
+    const git = (args) =>
+      execFileSync("git", args, {
+        cwd: __dirname,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+    const commit = git(["rev-parse", "--short", "HEAD"]);
+    return git(["status", "--porcelain"]) === "" ? commit : `${commit}-dirty`;
+  } catch {
+    return undefined;
+  }
+}
+
 export default {
   expo: {
     name: variant.name,
@@ -193,7 +216,7 @@ export default {
       fdroidBuild: isFdroidBuild,
       profileBuild: isProfileBuild,
       watchdogBuild: isWatchdogBuild,
-      diagnosticRevision: process.env.PASEO_DIAGNOSTIC_REVISION,
+      buildCommit: resolveBuildCommit(),
       diagnosticBuildTime: process.env.PASEO_DIAGNOSTIC_BUILD_TIME,
       router: {},
       eas: {
