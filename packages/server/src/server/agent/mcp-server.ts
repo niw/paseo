@@ -1,9 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
-import type {
-  CallToolResult,
-  ServerContext,
-  StandardSchemaWithJSON,
-} from "@modelcontextprotocol/server";
+import type { ServerContext, StandardSchemaWithJSON } from "@modelcontextprotocol/server";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { addModelVisibleStructuredContent } from "./tools/paseo-tool-serialization.js";
 import { createPaseoToolCatalog, type PaseoToolHostDependencies } from "./tools/paseo-tools.js";
@@ -13,7 +10,8 @@ export type AgentMcpServerOptions = PaseoToolHostDependencies;
 
 type McpToolContext = ServerContext;
 
-function toMcpToolResult(result: PaseoToolResult): CallToolResult {
+// The gateway still uses the v1 SDK, whose result type also fits the v2 handler.
+export function toMcpToolResult(result: PaseoToolResult): CallToolResult {
   const modelVisibleResult = addModelVisibleStructuredContent(result);
   return {
     content: modelVisibleResult.content as CallToolResult["content"],
