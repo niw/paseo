@@ -209,164 +209,182 @@ export function createHostResolver(input: {
       if (destination === input.serverId) return action(input.local);
       if (input.lockedCwd)
         throw new Error("This caller is restricted to its local working directory");
-      return input.hosts().use(destination, async (client) =>
-        action({
-          async createAgent(args) {
-            const parsed = remoteCreate.parse(args);
-            const { provider, model } = resolveRequiredProviderModel(parsed.provider);
-            const workspace = (await client.fetchWorkspaces({})).entries.find(
-              (row) => row.id === parsed.workspaceId,
-            );
-            if (!workspace) throw new Error(`Workspace ${parsed.workspaceId} not found`);
-            const labels = {
-              ...parsed.labels,
-              ...(input.callerAgentId
-                ? parentAddressLabels({ agentId: input.callerAgentId, serverId: input.serverId })
-                : {}),
-            };
-            const snapshot = await client.createAgent({
-              config: {
-                provider,
-                model,
-                cwd: workspace.workspaceDirectory,
-                title: parsed.title,
-                modeId: parsed.settings?.modeId,
-                thinkingOptionId: parsed.settings?.thinkingOptionId,
-                featureValues: parsed.settings?.features,
+      return input
+        .hosts()
+        .use(destination, async (client) =>
+          action(
+            createRemoteHostOperations(
+              client,
+              input.callerAgentId
+                ? { agentId: input.callerAgentId, serverId: input.serverId }
+                : null,
+            ),
+          ),
+        );
+    },
+  };
+}
+
+/**
+ * Host operations carried out over one daemon client. They use only that client's RPCs, so
+ * anything holding a client can run them: the daemon over a connected-host route, or the MCP
+ * gateway over its own connection. `caller` names the agent on whose behalf they run, if any.
+ */
+export function createRemoteHostOperations(
+  client: DaemonClient,
+  caller: { agentId: string; serverId: string } | null,
+): HostOperations {
+  return {
+    async createAgent(args) {
+      const parsed = remoteCreate.parse(args);
+      const { provider, model } = resolveRequiredProviderModel(parsed.provider);
+      // Exact-ID operations must also resolve background workspaces.
+      const { entries } = await client.fetchWorkspaces({
+        filter: { query: parsed.workspaceId },
+      });
+      const workspace = entries.find((row) => row.id === parsed.workspaceId);
+      if (!workspace) throw new Error(`Workspace ${parsed.workspaceId} not found`);
+      const labels = {
+        ...parsed.labels,
+        ...(caller ? parentAddressLabels(caller) : {}),
+      };
+      const snapshot = await client.createAgent({
+        config: {
+          provider,
+          model,
+          cwd: workspace.workspaceDirectory,
+          title: parsed.title,
+          modeId: parsed.settings?.modeId,
+          thinkingOptionId: parsed.settings?.thinkingOptionId,
+          featureValues: parsed.settings?.features,
+        },
+        workspaceId: parsed.workspaceId,
+        labels,
+        initialPrompt: parsed.initialPrompt,
+        idempotencyKey: parsed.idempotencyKey,
+      });
+      return result({
+        agentId: snapshot.id,
+        type: snapshot.provider,
+        status: snapshot.status,
+        cwd: snapshot.cwd,
+        workspaceId: snapshot.workspaceId,
+        currentModeId: snapshot.currentModeId,
+        availableModes: snapshot.availableModes,
+      });
+    },
+    async sendPrompt(args) {
+      const agentId = args.agentId as string;
+      // Human sends retain the established mode RPC on older connected hosts.
+      // Agent sends apply their requested mode when the recipient dispatches the batch.
+      if (!caller && args.sessionMode !== undefined) {
+        await client.setAgentMode(agentId, args.sessionMode as string);
+      }
+      const agent = (
+        await client.fetchAgent(agentId).catch((error) => {
+          // Snapshot preflight precedes sendMessage, so failure is definitely unsent.
+          throw new HostOperationRejectedError(error);
+        })
+      )?.agent;
+      if (!agent) throw new HostOperationRejectedError(new Error(`Agent ${agentId} not found`));
+      const receipt = await client
+        .sendMessage(agentId, args.prompt as string, {
+          sessionMode: caller ? (args.sessionMode as string | undefined) : undefined,
+          sourceAgentId: caller?.agentId,
+          sourceAgentServerId: caller?.serverId,
+          activeTurnBehavior:
+            (args.activeTurnBehavior as ActiveTurnBehavior | undefined) ??
+            (caller ? "steer" : "interrupt"),
+        })
+        .catch((error) => {
+          if (isAmbiguousPromptFailure(error)) throw error;
+          throw new HostOperationRejectedError(error);
+        });
+      return result({
+        success: true,
+        ...receipt,
+        status: agent.status,
+        guidance:
+          receipt.deliveryStatus === "queued"
+            ? "Queued for delivery after two quiet seconds. You will get notified when the prompted agent finishes, errors, or needs permission unless notifyOnFinish is false."
+            : "Dispatch acknowledged. Observe completion using get_agent_status/get_agent_activity or SDK/RPC subscriptions and wait APIs.",
+      });
+    },
+    async getStatus(args) {
+      const agent = (await client.fetchAgent(args.agentId as string))?.agent;
+      if (!agent) throw new Error(`Agent ${args.agentId} not found`);
+      return result({ status: agent.status, snapshot: agent });
+    },
+    async getActivity(args) {
+      const agentId = args.agentId as string;
+      const limit = args.limit as number | undefined;
+      const timeline = await client.fetchAgentTimeline(agentId, {
+        direction: "tail",
+        limit: limit ?? 0,
+      });
+      const agent = (await client.fetchAgent(agentId))?.agent;
+      if (!agent) throw new Error(`Agent ${agentId} not found`);
+      return result({
+        agentId,
+        ...summarizeAgentActivity(
+          timeline.entries.map((entry) => entry.item),
+          limit,
+        ),
+        currentModeId: agent.currentModeId,
+      });
+    },
+    async listAgents(args) {
+      const { entries } = await client.fetchAgents({
+        includeBackground: args.includeBackground === true,
+        filter: { includeArchived: args.includeArchived === true },
+      });
+      return result({
+        agents: selectAgentListItems(
+          entries.map((entry) => entry.agent),
+          {
+            cwd: (args.cwd as string | undefined)?.trim()
+              ? expandUserPath(args.cwd as string)
+              : undefined,
+            statuses: args.statuses as AgentSnapshotPayload["status"][] | undefined,
+            sinceHours: args.sinceHours as number | undefined,
+            limit: args.limit as number | undefined,
+          },
+        ),
+      });
+    },
+    async listWorkspaces(args) {
+      const { entries } = await client.fetchWorkspaces({
+        includeBackground: args.includeBackground === true,
+      });
+      return result({ workspaces: entries.map(workspaceSummary) });
+    },
+    async createWorkspace(args) {
+      const isolation = z.enum(["local", "worktree"]).parse(args.isolation);
+      const path = z.string().min(1).parse(args.path);
+      const response = await client.createWorkspace({
+        source:
+          isolation === "local"
+            ? { kind: "directory", path, projectId: args.projectId as string | undefined }
+            : {
+                kind: "worktree",
+                cwd: path,
+                projectId: args.projectId as string | undefined,
+                action:
+                  args.mode === "checkout-branch" || args.mode === "checkout-pr"
+                    ? "checkout"
+                    : "branch-off",
+                baseBranch: args.baseBranch as string | undefined,
+                branchName: args.branchName as string | undefined,
+                refName: args.branch as string | undefined,
+                githubPrNumber: args.prNumber as number | undefined,
+                worktreeSlug: args.worktreeSlug as string | undefined,
               },
-              workspaceId: parsed.workspaceId,
-              labels,
-              initialPrompt: parsed.initialPrompt,
-              idempotencyKey: parsed.idempotencyKey,
-            });
-            return result({
-              agentId: snapshot.id,
-              type: snapshot.provider,
-              status: snapshot.status,
-              cwd: snapshot.cwd,
-              workspaceId: snapshot.workspaceId,
-              currentModeId: snapshot.currentModeId,
-              availableModes: snapshot.availableModes,
-            });
-          },
-          async sendPrompt(args) {
-            const agentId = args.agentId as string;
-            // Human sends retain the established mode RPC on older connected hosts.
-            // Agent sends apply their requested mode when the recipient dispatches the batch.
-            if (!input.callerAgentId && args.sessionMode !== undefined) {
-              await client.setAgentMode(agentId, args.sessionMode as string);
-            }
-            const agent = (
-              await client.fetchAgent(agentId).catch((error) => {
-                // Snapshot preflight precedes sendMessage, so failure is definitely unsent.
-                throw new HostOperationRejectedError(error);
-              })
-            )?.agent;
-            if (!agent)
-              throw new HostOperationRejectedError(new Error(`Agent ${agentId} not found`));
-            const receipt = await client
-              .sendMessage(agentId, args.prompt as string, {
-                sessionMode: input.callerAgentId
-                  ? (args.sessionMode as string | undefined)
-                  : undefined,
-                sourceAgentId: input.callerAgentId,
-                sourceAgentServerId: input.callerAgentId ? input.serverId : undefined,
-                activeTurnBehavior:
-                  (args.activeTurnBehavior as ActiveTurnBehavior | undefined) ??
-                  (input.callerAgentId ? "steer" : "interrupt"),
-              })
-              .catch((error) => {
-                if (isAmbiguousPromptFailure(error)) throw error;
-                throw new HostOperationRejectedError(error);
-              });
-            return result({
-              success: true,
-              ...receipt,
-              status: agent.status,
-              guidance:
-                receipt.deliveryStatus === "queued"
-                  ? "Queued for delivery after two quiet seconds. You will get notified when the prompted agent finishes, errors, or needs permission unless notifyOnFinish is false."
-                  : "Dispatch acknowledged. Observe completion using get_agent_status/get_agent_activity or SDK/RPC subscriptions and wait APIs.",
-            });
-          },
-          async getStatus(args) {
-            const agent = (await client.fetchAgent(args.agentId as string))?.agent;
-            if (!agent) throw new Error(`Agent ${args.agentId} not found`);
-            return result({ status: agent.status, snapshot: agent });
-          },
-          async getActivity(args) {
-            const agentId = args.agentId as string;
-            const limit = args.limit as number | undefined;
-            const timeline = await client.fetchAgentTimeline(agentId, {
-              direction: "tail",
-              limit: limit ?? 0,
-            });
-            const agent = (await client.fetchAgent(agentId))?.agent;
-            if (!agent) throw new Error(`Agent ${agentId} not found`);
-            return result({
-              agentId,
-              ...summarizeAgentActivity(
-                timeline.entries.map((entry) => entry.item),
-                limit,
-              ),
-              currentModeId: agent.currentModeId,
-            });
-          },
-          async listAgents(args) {
-            const { entries } = await client.fetchAgents({
-              includeBackground: args.includeBackground === true,
-              filter: { includeArchived: args.includeArchived === true },
-            });
-            return result({
-              agents: selectAgentListItems(
-                entries.map((entry) => entry.agent),
-                {
-                  cwd: (args.cwd as string | undefined)?.trim()
-                    ? expandUserPath(args.cwd as string)
-                    : undefined,
-                  statuses: args.statuses as AgentSnapshotPayload["status"][] | undefined,
-                  sinceHours: args.sinceHours as number | undefined,
-                  limit: args.limit as number | undefined,
-                },
-              ),
-            });
-          },
-          async listWorkspaces(args) {
-            const { entries } = await client.fetchWorkspaces({
-              includeBackground: args.includeBackground === true,
-            });
-            return result({ workspaces: entries.map(workspaceSummary) });
-          },
-          async createWorkspace(args) {
-            const isolation = z.enum(["local", "worktree"]).parse(args.isolation);
-            const path = z.string().min(1).parse(args.path);
-            const response = await client.createWorkspace({
-              source:
-                isolation === "local"
-                  ? { kind: "directory", path, projectId: args.projectId as string | undefined }
-                  : {
-                      kind: "worktree",
-                      cwd: path,
-                      projectId: args.projectId as string | undefined,
-                      action:
-                        args.mode === "checkout-branch" || args.mode === "checkout-pr"
-                          ? "checkout"
-                          : "branch-off",
-                      baseBranch: args.baseBranch as string | undefined,
-                      branchName: args.branchName as string | undefined,
-                      refName: args.branch as string | undefined,
-                      githubPrNumber: args.prNumber as number | undefined,
-                      worktreeSlug: args.worktreeSlug as string | undefined,
-                    },
-              title: args.title as string | undefined,
-              background: args.background as boolean | undefined,
-            });
-            if (response.error || !response.workspace)
-              throw new Error(response.error ?? "Workspace creation failed");
-            return result(workspaceSummary(response.workspace));
-          },
-        }),
-      );
+        title: args.title as string | undefined,
+        background: args.background as boolean | undefined,
+      });
+      if (response.error || !response.workspace)
+        throw new Error(response.error ?? "Workspace creation failed");
+      return result(workspaceSummary(response.workspace));
     },
   };
 }
