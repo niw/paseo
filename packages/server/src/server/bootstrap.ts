@@ -153,6 +153,7 @@ import { admitSecuredRelaySocket } from "./websocket/secure-relay-ingress.js";
 import { disabledPushNotificationSender, type PushNotificationSender } from "./push/index.js";
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
+import { resolveDaemonCommit } from "./daemon-commit.js";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type {
   AgentProfile,
@@ -609,6 +610,7 @@ export async function createPaseoDaemon(
   const bootstrapStart = performance.now();
   const elapsed = () => `${(performance.now() - bootstrapStart).toFixed(0)}ms`;
   const daemonVersion = config.daemonVersion ?? resolveDaemonVersion(import.meta.url);
+  const daemonCommit = await resolveDaemonCommit();
   const initialMutableConfig = createInitialMutableDaemonConfig(config);
   const speechService = createSpeechService({
     logger,
@@ -1895,6 +1897,7 @@ export async function createPaseoDaemon(
                 daemonStatusRpc: dependencies.serverFeatureOverrides?.daemonStatusRpc,
                 relayConfig: dependencies.serverFeatureOverrides?.relayConfig,
                 startPaused: true,
+                daemonCommit,
               },
               workspaceAutoName,
               workspaceRuntimeStore,
