@@ -2060,3 +2060,136 @@ test("does not use stream_event uuid as assistant message identity when message_
 
   await session.close();
 });
+
+function mockScriptedTurn(sessionId: string, frames: Record<string, unknown>[]) {
+  sdkQueryFactory.mockImplementation(({ prompt }: { prompt: AsyncIterable<unknown> }) => {
+    const readPromptUuid = createPromptUuidReader(prompt);
+    const queue: (() => Promise<Record<string, unknown>>)[] = [
+      async () => ({
+        type: "system",
+        subtype: "init",
+        session_id: sessionId,
+        permissionMode: "default",
+        model: "opus",
+      }),
+      async () => ({
+        type: "user",
+        message: { role: "user", content: "scripted prompt" },
+        parent_tool_use_id: null,
+        uuid: (await readPromptUuid()) ?? "missing-prompt-uuid",
+        session_id: sessionId,
+      }),
+      ...frames.map((frame) => async () => frame),
+      async () => ({
+        type: "result",
+        subtype: "success",
+        usage: buildUsage(),
+        total_cost_usd: 0,
+      }),
+    ];
+    return createBaseQueryMock(
+      vi.fn(async () => {
+        const nextFrame = queue.shift();
+        return nextFrame
+          ? { done: false, value: await nextFrame() }
+          : { done: true, value: undefined };
+      }),
+    );
+  });
+}
+
+function streamFrame(event: Record<string, unknown>) {
+  return { type: "stream_event", parent_tool_use_id: null, event };
+}
+
+function completedBlockFrame(messageId: string, block: Record<string, unknown>) {
+  return {
+    type: "assistant",
+    parent_tool_use_id: null,
+    message: { id: messageId, role: "assistant", model: "opus", content: [block] },
+  };
+}
+
+function streamedBlockFrames(
+  messageId: string,
+  index: number,
+  block:
+    | { type: "thinking"; chunks: string[] }
+    | { type: "text"; chunks: string[] }
+    | { type: "tool_use"; id: string; name: string },
+) {
+  if (block.type === "tool_use") {
+    const completed = { type: "tool_use", id: block.id, name: block.name, input: {} };
+    return [
+      streamFrame({ type: "content_block_start", index, content_block: completed }),
+      streamFrame({ type: "content_block_stop", index }),
+      completedBlockFrame(messageId, completed),
+    ];
+  }
+  const field = block.type === "thinking" ? "thinking" : "text";
+  const deltaType = block.type === "thinking" ? "thinking_delta" : "text_delta";
+  return [
+    streamFrame({
+      type: "content_block_start",
+      index,
+      content_block: { type: block.type, [field]: "" },
+    }),
+    ...block.chunks.map((chunk) =>
+      streamFrame({
+        type: "content_block_delta",
+        index,
+        delta: { type: deltaType, [field]: chunk },
+      }),
+    ),
+    streamFrame({ type: "content_block_stop", index }),
+    completedBlockFrame(messageId, { type: block.type, [field]: block.chunks.join("") }),
+  ];
+}
+
+function readTimelineText(events: AgentStreamEvent[], type: "reasoning" | "assistant_message") {
+  return events
+    .filter(
+      (event): event is Extract<AgentStreamEvent, { type: "timeline" }> =>
+        event.type === "timeline" && event.item.type === type,
+    )
+    .map((event) => (event.item as Extract<AgentTimelineItem, { type: typeof type }>).text)
+    .join("");
+}
+
+test("shows each thinking block once when a message streams several of them", async () => {
+  mockScriptedTurn("redesign-multi-thinking-session", [
+    streamFrame({ type: "message_start", message: { id: "message-1", role: "assistant" } }),
+    ...streamedBlockFrames("message-1", 0, { type: "thinking", chunks: ["Weighing ", "tickets."] }),
+    ...streamedBlockFrames("message-1", 1, {
+      type: "thinking",
+      chunks: ["既存の", "issue を確認。"],
+    }),
+    ...streamedBlockFrames("message-1", 2, { type: "text", chunks: ["Done", "."] }),
+    ...streamedBlockFrames("message-1", 3, { type: "tool_use", id: "tool-1", name: "Read" }),
+    ...streamedBlockFrames("message-1", 4, { type: "text", chunks: ["After."] }),
+    streamFrame({ type: "message_stop" }),
+  ]);
+
+  const session = await createSession();
+  const events = await collectUntilTerminal(streamSession(session, "scripted prompt"));
+
+  expect(readTimelineText(events, "reasoning")).toBe("Weighing tickets.既存のissue を確認。");
+  expect(readTimelineText(events, "assistant_message")).toBe("Done.After.");
+
+  await session.close();
+});
+
+test("shows a completed block that never streamed", async () => {
+  mockScriptedTurn("redesign-unstreamed-block-session", [
+    completedBlockFrame("message-1", { type: "thinking", thinking: "Planning." }),
+    completedBlockFrame("message-1", { type: "text", text: "Answer." }),
+  ]);
+
+  const session = await createSession();
+  const events = await collectUntilTerminal(streamSession(session, "scripted prompt"));
+
+  expect(readTimelineText(events, "reasoning")).toBe("Planning.");
+  expect(readTimelineText(events, "assistant_message")).toBe("Answer.");
+
+  await session.close();
+});
