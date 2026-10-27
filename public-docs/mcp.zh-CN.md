@@ -64,6 +64,105 @@ nav: MCP 参考
 
 这项设置限制的是呈现给 Agent 的工具目录。对于可以通过 shell 访问主机的 Agent，它不是安全边界。
 
+## MCP 网关 {#mcp-gateway}
+
+MCP 网关是一个可以驱动多个 daemon 上 Agent 的 MCP 服务器。它不是 Paseo daemon，也不运行 Agent。它像应用或 CLI 一样，以普通客户端的身份连接每个 daemon，因此任何能用 `--host` 访问的 daemon 都可以使用，包括通过配对 URL 经由中继连接的 daemon。它可以运行在任何机器上，例如一台其他机器上的 Agent 能够访问的小型服务器。
+
+添加它可以访问的 daemon。`add` 会连接一次，以固定每个 daemon 的 server ID：
+
+```sh
+paseo mcp host add 'https://app.paseo.sh/#offer=...' --label laptop
+paseo mcp host add 'ssh://deploy@build-box' --label build-box
+paseo mcp host ls
+```
+
+连接保存在 `<home>/mcp-gateway.json` 中，权限为 `0600`。这些连接就是凭据：任何能读取该文件的人，都能以该连接的权限访问对应的 daemon。
+
+正在运行的网关无需重启即可识别新增或移除的主机。当调用方列出主机，或指定了网关不认识的 server ID 时，网关会重新读取该文件，因此执行 `paseo mcp host add` 后，下一次 `list_hosts` 就会显示新主机。
+
+除 `list_hosts` 外，每个网关工具都需要来自 `list_hosts` 的 `serverId`，没有默认主机。除了提供给 Agent 的[工具](#tools)，网关还提供远程调用方原本需要在主机上使用 shell 才能完成的操作：通过 checkout 工具查看 git 状态和差异、提交、推送和创建 Pull Request，以及 `list_directory` 和 `read_file`。路径是主机上的绝对路径。与 Agent 工具同名的工具行为相同，区别如下：
+
+- `create_agent` 需要已有的 `workspaceId` 和明确的 provider/model。
+- 网关不发送完成通知。请调用 `wait_for_agent`，Agent 仍在工作时它会返回 `timeout`。
+- 不提供 `kill_agent`；请使用 `archive_agent`。
+- `create_terminal` 需要 `workspaceId`，`send_terminal_keys` 按默认输入模式编码按键。
+- `create_schedule` 接受 `provider` 和 `cwd`（每次运行启动一个新 Agent），或者 `agentId`（向已有 Agent 发送提示）。不提供 heartbeat。
+
+| 权限                | 工具                                                                                                                                                                                                                                                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspace.read`    | `list_projects`、`list_workspaces`、`list_workspace_scripts`、`list_agents`、`get_agent_status`、`get_agent_activity`、`wait_for_agent`、`list_pending_permissions`、`list_terminals`、`capture_terminal`、`get_checkout_status`、`get_checkout_diff`、`get_pull_request_status`、`list_directory`、`read_file`                        |
+| `workspace.write`   | `create_agent`、`send_agent_prompt`、`update_agent`、`set_agent_mode`、`cancel_agent`、`archive_agent`、`respond_to_permission`、`start_workspace_script`、`stop_workspace_script`、`create_terminal`、`send_terminal_keys`、`kill_terminal`、`commit_changes`、`pull_changes`、`push_changes`、`switch_branch`、`create_pull_request` |
+| `workspace.manage`  | `create_workspace`、`rename_workspace`、`archive_workspace`                                                                                                                                                                                                                                                                            |
+| `automation.manage` | `create_schedule`、`update_schedule`、`list_schedules`、`inspect_schedule`、`schedule_logs`、`run_schedule_once`、`pause_schedule`、`resume_schedule`、`delete_schedule`                                                                                                                                                               |
+| `daemon.read`       | `list_providers`、`list_models`、`list_profiles`、`inspect_provider`                                                                                                                                                                                                                                                                   |
+
+`list_hosts` 不需要任何权限。这些权限适用于 HTTP 调用方；`paseo mcp serve`（stdio）可以使用全部工具。
+
+每个工具都带有 MCP annotation。读取类工具标记为只读，取消、归档、终止或删除类工具标记为破坏性，因此客户端可以自动批准读取操作，并在其他操作前询问。
+
+完整的工具列表会占用数千个 token 的上下文。如果只想提供部分工具，可以用 `paseo mcp serve --tools list_agents,create_agent` 指定，或在 URL 中写成 `https://<hostname>/mcp/agents?tools=list_agents,create_agent`。`list_hosts` 总会包含在内，未知的名称会报错。
+
+### Exec 模式 {#exec-mode}
+
+`paseo mcp serve --mode exec`，或在 URL 中写 `?mode=exec`，会通过一个名为 `paseo` 的工具提供全部工具。它的定义只占几百个 token，而不是几千个。Agent 每次调用发送一条命令：
+
+| 命令     | 参数                      | 结果                                   |
+| -------- | ------------------------- | -------------------------------------- |
+| `tools`  |                           | 所有工具的名称、标题和作用             |
+| `search` | `query`                   | 名称、标题或描述中包含所有关键词的工具 |
+| `info`   | `tool`                    | 该工具的描述和 JSON 输入 schema        |
+| `call`   | `tool`、`args`、`confirm` | 该工具的结果                           |
+
+破坏性工具只有在 `confirm: true` 时才会运行。权限、`hosts` 和 `?tools=` 的作用与默认模式相同。对于一开始就加载全部工具定义的客户端，请使用 exec 模式。按需加载工具 schema 的客户端（例如 Claude Code）可以保留默认模式，逐个批准工具。
+
+### 为其他机器上的 Agent 提供服务 {#serve-agents-on-other-machines}
+
+远程 Agent 通过 [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/) 后面的 HTTP 访问网关。Access 负责认证调用方。网关验证 Access 附加到每个请求上的 JWT，并决定调用方可以做什么。在 `mcp-gateway.json` 中添加 `http` 部分：
+
+```json
+{
+  "hosts": [
+    {
+      "serverId": "<server ID>",
+      "label": "laptop",
+      "connection": "https://app.paseo.sh/#offer=..."
+    }
+  ],
+  "http": {
+    "listen": "127.0.0.1:6769",
+    "cloudflareAccess": {
+      "teamDomain": "example.cloudflareaccess.com",
+      "aud": ["<Access application audience tag>"]
+    },
+    "principals": [
+      { "email": "you@example.com", "permissions": ["workspace.read", "workspace.write"] },
+      {
+        "commonName": "<service token client ID>",
+        "permissions": ["workspace.read"],
+        "hosts": ["<server ID>"]
+      }
+    ]
+  }
+}
+```
+
+1. 为公开主机名创建一个 Access 应用，并把它的 audience tag 复制到 `aud`。
+2. 把该主机名的 cloudflared ingress 规则指向 `listen` 地址。
+3. 运行 `paseo mcp daemon start` 让网关在后台持续运行，或运行 `paseo mcp daemon run` 在前台运行。`paseo mcp daemon status` 显示它的监听地址和日志，`paseo mcp daemon stop` 停止它。日志 `<home>/mcp-gateway.log` 与 `daemon.log` 一样，在 10 MB 时轮转并保留三个文件。一个 home 同时只运行一个 HTTP 网关。
+4. 把远程 Agent 的 MCP 服务器 URL 配置为 `https://<hostname>/mcp/agents`。
+
+监听器只提供 `/mcp/agents`（与 daemon 的 Agent MCP 路径相同），并拒绝任何没有有效 `Cf-Access-Jwt-Assertion` 请求头的请求。Access 放行但 `principals` 中没有列出的身份会得到 `403`。修改 `http` 部分后请重启网关（`paseo mcp daemon restart`）。如果某个 principal 指定了未知主机，或者无法使用任何工具，网关将无法启动。
+
+每个 principal 的 `permissions` 按上表决定它能看到哪些工具，`hosts` 限制它能访问哪些 daemon；省略 `hosts` 表示可以访问所有 daemon。不在列表中的主机对调用方来说就像不存在一样。每个 daemon 也会把网关限制在其已保存连接的权限范围内。
+
+### 为一个本地 Agent 提供服务 {#serve-one-local-agent}
+
+`paseo mcp serve` 通过 stdin 和 stdout 为启动它的 MCP 客户端提供服务，可以在所有主机上使用全部工具。在网关所在机器的 MCP 客户端配置中这样使用：
+
+```json
+{ "command": "paseo", "args": ["mcp", "serve"] }
+```
+
 ## 心智模型 {#mental-model}
 
 工作区决定工作在哪里进行；Agent 的父子关系决定工作归谁所有。

@@ -1,16 +1,18 @@
 import http, { createServer as createHTTPServer } from "node:http";
 import net from "node:net";
 import { connectToLocalService, requestLocalService } from "./local-service-connection.js";
+import {
+  closeHttpServer,
+  listenHttpServer,
+  resolveBoundListenTarget,
+  type HttpListenTarget,
+} from "./http-listen.js";
 import { createHash } from "node:crypto";
-import { existsSync, unlinkSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import express, { type RequestHandler } from "express";
 import type { Logger } from "pino";
 
-export type ServiceProxyListenTarget =
-  | { type: "tcp"; host: string; port: number }
-  | { type: "socket"; path: string }
-  | { type: "pipe"; path: string };
+export type ServiceProxyListenTarget = HttpListenTarget;
 
 export interface ServiceProxyRoute {
   hostname: string;
@@ -950,7 +952,7 @@ class NodeServiceProxySubsystem implements ServiceProxySubsystem {
     server.on("upgrade", this.upgradeHandler({ passthroughUnknown: false }));
     this.standaloneServer = server;
     try {
-      await listen(server, options.listenTarget);
+      await listenHttpServer(server, options.listenTarget);
       this.standaloneListenTarget = resolveBoundListenTarget(options.listenTarget, server);
       return this.standaloneListenTarget;
     } catch (error) {
@@ -968,54 +970,8 @@ class NodeServiceProxySubsystem implements ServiceProxySubsystem {
     if (!server) {
       return;
     }
-    server.closeAllConnections();
-    await new Promise<void>((resolve) => {
-      server.close(() => resolve());
-    });
-    if (listenTarget?.type === "socket" && existsSync(listenTarget.path)) {
-      unlinkSync(listenTarget.path);
-    }
+    await closeHttpServer(server, listenTarget);
   }
-}
-
-function listen(
-  server: ReturnType<typeof createHTTPServer>,
-  listenTarget: ServiceProxyListenTarget,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const onError = (err: Error) => {
-      server.off("listening", onListening);
-      reject(err);
-    };
-    const onListening = () => {
-      server.off("error", onError);
-      resolve();
-    };
-    server.once("error", onError);
-    server.once("listening", onListening);
-    if (listenTarget.type === "tcp") {
-      server.listen(listenTarget.port, listenTarget.host);
-    } else {
-      if (listenTarget.type === "socket" && existsSync(listenTarget.path)) {
-        unlinkSync(listenTarget.path);
-      }
-      server.listen(listenTarget.path);
-    }
-  });
-}
-
-function resolveBoundListenTarget(
-  listenTarget: ServiceProxyListenTarget,
-  httpServer: ReturnType<typeof createHTTPServer>,
-): ServiceProxyListenTarget {
-  if (listenTarget.type !== "tcp") {
-    return listenTarget;
-  }
-  const address = httpServer.address();
-  if (!address || typeof address === "string") {
-    throw new Error("HTTP server did not expose a TCP address after listening");
-  }
-  return { type: "tcp", host: listenTarget.host, port: address.port };
 }
 
 export function findFreePort(): Promise<number> {
