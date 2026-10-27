@@ -8,16 +8,16 @@ import { createWorkspaceRuntimeStore } from "./workspace-runtime-store/index.js"
 import type { PluginRegistries } from "@getpaseo/protocol/plugin-registry";
 import { describeHookWorkspace } from "./plugins/lifecycle/index.js";
 import express from "express";
-import { createServer as createHTTPServer, type IncomingMessage, type ServerResponse } from "http";
+import { createServer as createHTTPServer } from "http";
 import { constants, existsSync, unlinkSync } from "fs";
 import { open, rm, stat } from "fs/promises";
 import { randomUUID } from "node:crypto";
 import { getHostName } from "./host-name.js";
 import path from "node:path";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Logger } from "pino";
 import { z } from "zod";
 import { createBranchChangeRouteHandler } from "./script-route-branch-handler.js";
+import { parseListenString } from "./http-listen.js";
 
 export type ListenTarget =
   | { type: "tcp"; host: string; port: number }
@@ -44,49 +44,7 @@ function resolveBoundListenTarget(
   };
 }
 
-// Matches a Windows drive-letter path like C:\ or D:\
-const WINDOWS_DRIVE_RE = /^[A-Za-z]:\\/;
-
-export function parseListenString(listen: string): ListenTarget {
-  // 1. Windows named pipes: \\.\pipe\... or pipe://...
-  if (listen.startsWith("\\\\.\\pipe\\") || listen.startsWith("pipe://")) {
-    return {
-      type: "pipe",
-      path: listen.startsWith("pipe://") ? listen.slice("pipe://".length) : listen,
-    };
-  }
-  // 2. Explicit unix:// prefix
-  if (listen.startsWith("unix://")) {
-    return { type: "socket", path: listen.slice(7) };
-  }
-  // 3. Reject Windows absolute drive paths — they are not Unix sockets
-  if (WINDOWS_DRIVE_RE.test(listen)) {
-    throw new Error(`Invalid listen string (Windows path is not a valid listen target): ${listen}`);
-  }
-  // 4. POSIX absolute path (/ or ~) — Unix socket
-  if (listen.startsWith("/") || listen.startsWith("~")) {
-    return { type: "socket", path: listen };
-  }
-  // 5. Pure numeric — TCP port on 127.0.0.1
-  const trimmed = listen.trim();
-  if (/^\d+$/.test(trimmed)) {
-    const port = parseInt(trimmed, 10);
-    return { type: "tcp", host: "127.0.0.1", port };
-  }
-  // 6. host:port — TCP
-  if (listen.includes(":")) {
-    const lastColonIdx = listen.lastIndexOf(":");
-    const host = listen.slice(0, lastColonIdx);
-    const portStr = listen.slice(lastColonIdx + 1);
-    const parsedPort = parseInt(portStr, 10);
-    if (!Number.isFinite(parsedPort)) {
-      throw new Error(`Invalid port in listen string: ${listen}`);
-    }
-    const cleanHost = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
-    return { type: "tcp", host: cleanHost || "127.0.0.1", port: parsedPort };
-  }
-  throw new Error(`Invalid listen string: ${listen}`);
-}
+export { parseListenString };
 
 export function formatListenTarget(listenTarget: ListenTarget | null): string | null {
   if (!listenTarget) {
@@ -142,7 +100,7 @@ import { createSpeechSettingsOwner } from "./speech/speech-settings.js";
 import { AgentManager } from "./agent/agent-manager.js";
 import { AgentStorage } from "./agent/agent-storage.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
-import { createAgentMcpServer } from "./agent/mcp-server.js";
+import { createAgentMcpServer, serveStatelessMcpRequest } from "./agent/mcp-server.js";
 import {
   createPaseoToolCatalog,
   createPaseoAgentToolManifest,
@@ -1583,8 +1541,8 @@ export async function createPaseoDaemon(
   {
     const agentMcpRoute = "/mcp/agents";
 
-    const createAgentMcpSession = async (callerAgentId?: string) => {
-      const agentMcpServer = await createAgentMcpServer(
+    const createAgentMcpSessionServer = (callerAgentId?: string) =>
+      createAgentMcpServer(
         createAgentToolHostDependencies({
           callerAgentId,
           paseoToolPolicy: callerAgentId
@@ -1592,27 +1550,6 @@ export async function createPaseoDaemon(
             : undefined,
         }),
       );
-
-      // Stateless mode: each HTTP request builds a fresh server + transport that is
-      // torn down when the response closes, so no per-session state is retained between
-      // requests. The agent control plane only lists and calls tools, neither of which
-      // needs cross-request state, so sessions would only pin memory for the life of the
-      // daemon (agents that exit without a clean DELETE never get reaped).
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        // NOTE: We enforce a Vite-like host allowlist at the app/websocket layer.
-        // StreamableHTTPServerTransport's built-in check requires exact Host header matches.
-        enableDnsRebindingProtection: false,
-      });
-      Object.assign(transport, {
-        onerror: (err: Error) => {
-          logger.error({ err }, "Agent MCP transport error");
-        },
-      });
-
-      await agentMcpServer.connect(transport);
-      return { server: agentMcpServer, transport };
-    };
 
     const runAgentMcpRequest = async (
       req: express.Request,
@@ -1648,52 +1585,34 @@ export async function createPaseoDaemon(
           "Agent MCP request",
         );
       }
-      try {
-        // Stateless: GET (standalone SSE) and DELETE (session termination) have no
-        // meaning without sessions. The MCP client tolerates 405 on the GET stream
-        // and never issues a DELETE because it is never handed a session id.
-        if (req.method !== "POST") {
-          res.status(405).json({
-            jsonrpc: "2.0",
-            error: {
-              code: -32000,
-              message: "Method not allowed",
-            },
-            id: null,
-          });
-          return;
-        }
-        const callerAgentIdRaw = req.query.callerAgentId;
-        let callerAgentId: string | undefined;
-        if (typeof callerAgentIdRaw === "string") {
-          callerAgentId = callerAgentIdRaw;
-        } else if (Array.isArray(callerAgentIdRaw) && typeof callerAgentIdRaw[0] === "string") {
-          callerAgentId = callerAgentIdRaw[0];
-        }
-        const { server, transport } = await createAgentMcpSession(callerAgentId);
-        res.on("close", () => {
-          void transport.close();
-          void server.close();
+      // Stateless: GET (standalone SSE) and DELETE (session termination) have no
+      // meaning without sessions. The MCP client tolerates 405 on the GET stream
+      // and never issues a DELETE because it is never handed a session id.
+      if (req.method !== "POST") {
+        res.status(405).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32000,
+            message: "Method not allowed",
+          },
+          id: null,
         });
-
-        await transport.handleRequest(
-          req as unknown as IncomingMessage,
-          res as unknown as ServerResponse,
-          req.body,
-        );
-      } catch (err) {
-        logger.error({ err }, "Failed to handle Agent MCP request");
-        if (!res.headersSent) {
-          res.status(500).json({
-            jsonrpc: "2.0",
-            error: {
-              code: -32603,
-              message: "Internal MCP server error",
-            },
-            id: null,
-          });
-        }
+        return;
       }
+      const callerAgentIdRaw = req.query.callerAgentId;
+      let callerAgentId: string | undefined;
+      if (typeof callerAgentIdRaw === "string") {
+        callerAgentId = callerAgentIdRaw;
+      } else if (Array.isArray(callerAgentIdRaw) && typeof callerAgentIdRaw[0] === "string") {
+        callerAgentId = callerAgentIdRaw[0];
+      }
+      await serveStatelessMcpRequest({
+        createServer: () => createAgentMcpSessionServer(callerAgentId),
+        req,
+        res,
+        body: req.body,
+        logger,
+      });
     };
 
     const handleAgentMcpRequest: express.RequestHandler = (req, res) => {
