@@ -6416,6 +6416,41 @@ async function mapAssistantHistoryBlocksWithMessageId(
   return items;
 }
 
+interface ClaudeQueuedUserPrompt {
+  attachment: Record<string, unknown>;
+  text: string;
+}
+
+/**
+ * A `queued_command` attachment in prompt mode that the user sent. Claude Code also queues in
+ * prompt mode what other agents send this session, such as a subagent's `<agent-message>`
+ * hand-back or a `<cross-session-message>`, and marks those `isMeta` with a non-human origin.
+ * Paseo's own steered prompts carry no origin, so anything with another origin is not the user's.
+ */
+function readClaudeQueuedUserPrompt(entry: ClaudeHistoryEntry): ClaudeQueuedUserPrompt | null {
+  if (entry.type !== "attachment") return null;
+  const attachment = toObjectRecord(entry.attachment);
+  if (attachment?.type !== "queued_command" || attachment.commandMode !== "prompt") return null;
+  if (attachment.isMeta === true) return null;
+  if (attachment.origin !== undefined && toObjectRecord(attachment.origin)?.kind !== "human") {
+    return null;
+  }
+  const text = extractUserMessageText(attachment.prompt);
+  return text ? { attachment, text } : null;
+}
+
+// NOTE: A prompt the user sends while Claude Code works joins the running turn and is
+// journaled only as a `queued_command` attachment, with no user record of its own.
+function mapAbsorbedHumanPrompt(entry: ClaudeHistoryEntry): AgentTimelineItem | null {
+  const queued = readClaudeQueuedUserPrompt(entry);
+  if (!queued || toObjectRecord(queued.attachment.origin)?.kind !== "human") return null;
+  return {
+    type: "user_message",
+    text: queued.text,
+    ...(typeof entry.uuid === "string" && entry.uuid ? { messageId: entry.uuid } : {}),
+  };
+}
+
 function convertClaudeHistoryEntryPreamble(
   entry: ClaudeHistoryEntry,
 ): { shortCircuit: AgentTimelineItem[] } | { proceed: { content: unknown } } {
@@ -6436,6 +6471,11 @@ function convertClaudeHistoryEntryPreamble(
   const taskNotificationItem = mapTaskNotificationSystemRecordToToolCall(entry);
   if (taskNotificationItem) {
     return { shortCircuit: [taskNotificationItem] };
+  }
+
+  const absorbedPrompt = mapAbsorbedHumanPrompt(entry);
+  if (absorbedPrompt) {
+    return { shortCircuit: [absorbedPrompt] };
   }
 
   if (entry.isCompactSummary) {
@@ -6480,13 +6520,10 @@ function isProviderImageMessage(item: AgentTimelineItem): boolean {
  * also what a rewind to it resolves. The other modes carry task notifications, not user messages.
  */
 function readSteeredPromptHistoryItem(entry: ClaudeHistoryEntry): AgentTimelineItem | null {
-  if (entry.type !== "attachment") return null;
-  const attachment = toObjectRecord(entry.attachment);
-  if (attachment?.type !== "queued_command" || attachment.commandMode !== "prompt") return null;
-  const text = extractUserMessageText(attachment.prompt);
-  if (!text) return null;
-  const messageId = readTrimmedString(attachment.source_uuid);
-  return { type: "user_message", text, ...(messageId ? { messageId } : {}) };
+  const queued = readClaudeQueuedUserPrompt(entry);
+  if (!queued) return null;
+  const messageId = readTrimmedString(queued.attachment.source_uuid);
+  return { type: "user_message", text: queued.text, ...(messageId ? { messageId } : {}) };
 }
 
 export async function convertClaudeHistoryEntry(
