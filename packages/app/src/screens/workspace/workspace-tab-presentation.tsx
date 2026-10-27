@@ -9,6 +9,7 @@ import invariant from "tiny-invariant";
 import { getPanelRegistration, type PanelIconProps } from "@/panels/panel-registry";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
+import type { TerminalAgentSession } from "@getpaseo/protocol/messages";
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
 import { usePanelInstanceAttributes } from "@/panels/panel-instance-attributes";
 
@@ -23,6 +24,8 @@ export interface WorkspaceTabPresentation {
   titleState: "ready" | "loading";
   icon: React.ComponentType<PanelIconProps>;
   statusBucket: SidebarStateBucket | null;
+  agentSession?: TerminalAgentSession;
+  hasAgentTerminal?: boolean;
 }
 
 interface WorkspaceTabPresentationResolverProps {
@@ -84,8 +87,12 @@ function WorkspaceTabPresentationResolverInner({
       titleState: descriptor.titleState,
       icon: descriptor.icon,
       statusBucket: descriptor.statusBucket,
+      ...(descriptor.agentSession ? { agentSession: descriptor.agentSession } : {}),
+      ...(descriptor.hasAgentTerminal ? { hasAgentTerminal: true } : {}),
     }),
     [
+      descriptor.agentSession,
+      descriptor.hasAgentTerminal,
       descriptor.icon,
       descriptor.label,
       descriptor.tooltip,
