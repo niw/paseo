@@ -6376,6 +6376,34 @@ async function mapAssistantHistoryBlocksWithMessageId(
   return items;
 }
 
+// NOTE: A prompt the user sends while Claude Code works joins the running turn and is
+// journaled only as a `queued_command` attachment, with no user record of its own.
+function mapAbsorbedHumanPrompt(entry: ClaudeHistoryEntry): AgentTimelineItem | null {
+  if (entry.type !== "attachment" || typeof entry.attachment !== "object") {
+    return null;
+  }
+  const attachment = entry.attachment as {
+    type?: unknown;
+    prompt?: unknown;
+    commandMode?: unknown;
+    origin?: { kind?: unknown };
+  } | null;
+  if (
+    attachment?.type !== "queued_command" ||
+    attachment.commandMode !== "prompt" ||
+    attachment.origin?.kind !== "human" ||
+    typeof attachment.prompt !== "string" ||
+    !attachment.prompt.trim()
+  ) {
+    return null;
+  }
+  return {
+    type: "user_message",
+    text: attachment.prompt,
+    ...(typeof entry.uuid === "string" && entry.uuid ? { messageId: entry.uuid } : {}),
+  };
+}
+
 function convertClaudeHistoryEntryPreamble(
   entry: ClaudeHistoryEntry,
 ): { shortCircuit: AgentTimelineItem[] } | { proceed: { content: unknown } } {
@@ -6396,6 +6424,11 @@ function convertClaudeHistoryEntryPreamble(
   const taskNotificationItem = mapTaskNotificationSystemRecordToToolCall(entry);
   if (taskNotificationItem) {
     return { shortCircuit: [taskNotificationItem] };
+  }
+
+  const absorbedPrompt = mapAbsorbedHumanPrompt(entry);
+  if (absorbedPrompt) {
+    return { shortCircuit: [absorbedPrompt] };
   }
 
   if (entry.isCompactSummary) {
