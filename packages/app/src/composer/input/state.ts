@@ -152,7 +152,7 @@ export function runAlternateSendAction(ctx: SendActionContext): void {
   runDefaultSendAction(ctx);
 }
 
-export type MessageInputEnterAction = "alternate-send" | "default-send";
+export type MessageInputEnterAction = "newline" | "alternate-send" | "default-send";
 
 export interface MessageInputEnterContext {
   submitOnEnter: boolean;
@@ -160,14 +160,20 @@ export interface MessageInputEnterContext {
   shiftKey: boolean;
   metaKey: boolean;
   ctrlKey: boolean;
+  altKey: boolean;
   isAgentRunning: boolean;
   onQueue: ((payload: MessagePayload) => void) | undefined;
 }
 
+/**
+ * Maps an Enter press to a composer action. null leaves the key to the text field. Option/Alt+Enter
+ * is a newline in every mode, matching macOS text fields; the field does not insert one on its own.
+ */
 export function resolveMessageInputEnterAction(
   ctx: MessageInputEnterContext,
 ): MessageInputEnterAction | null {
   if (!ctx.submitOnEnter) return null;
+  if (ctx.altKey) return "newline";
   if (ctx.shiftKey) return null;
   const hasModifier = ctx.metaKey || ctx.ctrlKey;
   if (ctx.sendShortcut === "mod-enter") return hasModifier ? "default-send" : null;
