@@ -89,6 +89,25 @@ JSON output never includes connection credentials.
 the pinned daemon identity. Add `--replace-identity` with `--connection` only after verifying a changed
 destination. `rm` removes the saved connection; agents and workspaces on that host keep running.
 
+## MCP gateway
+
+`paseo mcp` runs a local MCP gateway that drives agents on several daemons. It keeps its own host list in `<home>/mcp-gateway.json`, separate from any daemon's connected hosts. `--host` does not apply; `--config <path>` selects another file.
+
+```sh
+paseo mcp host add 'https://app.paseo.sh/#offer=...' --label laptop
+paseo mcp host ls
+paseo mcp host rm <server-id>
+paseo mcp serve            # stdio, for the MCP client that launches it
+paseo mcp serve --tools list_agents,create_agent
+paseo mcp serve --mode exec
+paseo mcp daemon start     # HTTP behind Cloudflare Access, in the background
+paseo mcp daemon status
+paseo mcp daemon stop
+paseo mcp daemon run       # the same HTTP gateway in the foreground
+```
+
+See [MCP gateway](/docs/mcp#mcp-gateway) for tools, the HTTP configuration and permissions.
+
 ## Provider diagnostics
 
 Ask the daemon to inspect the provider environment it actually uses:

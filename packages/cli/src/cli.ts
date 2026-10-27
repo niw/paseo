@@ -1,4 +1,5 @@
 import { createHostCommand } from "./commands/host/index.js";
+import { createMcpCommand } from "./commands/mcp/index.js";
 import { pairCommand } from "./commands/daemon/pair.js";
 import { Command, Option } from "commander";
 import { createAgentCommand } from "./commands/agent/index.js";
@@ -134,6 +135,7 @@ export function createCli(): Command {
   // Daemon commands
   program.addCommand(createDaemonCommand());
   program.addCommand(createHubCommand());
+  program.addCommand(createMcpCommand());
 
   // Chat commands
 
