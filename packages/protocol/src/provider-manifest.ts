@@ -208,6 +208,15 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
     },
   },
   {
+    id: "claude-terminal",
+    label: "Claude (Terminal)",
+    description:
+      "Claude Code's interactive CLI in a Paseo terminal, driven from chat without the Agent SDK",
+    enabledByDefault: false,
+    defaultModeId: "default",
+    modes: CLAUDE_MODES,
+  },
+  {
     id: "codex",
     label: "Codex",
     description: "OpenAI's Codex workspace agent with sandbox controls and optional network access",
