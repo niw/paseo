@@ -69,6 +69,37 @@ describe("convertClaudeHistoryEntry", () => {
     expect(mapBlocks).not.toHaveBeenCalled();
   });
 
+  test("maps a prompt absorbed mid-turn to a user message", () => {
+    const entry = {
+      type: "attachment",
+      uuid: "absorbed-1",
+      attachment: {
+        type: "queued_command",
+        prompt: "Also check the tests",
+        commandMode: "prompt",
+        origin: { kind: "human" },
+      },
+    };
+
+    expect(convertClaudeHistoryEntry(entry, () => [])).toEqual([
+      { type: "user_message", text: "Also check the tests", messageId: "absorbed-1" },
+    ]);
+  });
+
+  test("skips queued commands that no human sent", () => {
+    const entry = {
+      type: "attachment",
+      attachment: {
+        type: "queued_command",
+        prompt: "<task-notification>done</task-notification>",
+        commandMode: "task-notification",
+        origin: { kind: "task-notification" },
+      },
+    };
+
+    expect(convertClaudeHistoryEntry(entry, () => [])).toEqual([]);
+  });
+
   test("maps user tool results to timeline items", () => {
     const toolUseId = "toolu_test";
     const entry = {
