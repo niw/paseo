@@ -27,6 +27,7 @@ import {
 import type { ManagedAgent } from "./agent-manager.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { ManagedProcessRegistry } from "../managed-processes/managed-processes.js";
+import type { TerminalManager } from "../../terminal/terminal-manager.js";
 import type { OpenCodeBridge } from "./providers/opencode/bridge.js";
 import type {
   AgentProviderRuntimeSettingsMap,
@@ -117,6 +118,7 @@ export interface ProviderSnapshotManagerOptions {
   providerOverrides?: Record<string, ProviderOverride>;
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   managedProcesses?: ManagedProcessRegistry;
+  terminalManager?: TerminalManager;
   isDev?: boolean;
   extraClients?: Partial<Record<AgentProvider, AgentClient>>;
   refreshTimeoutMs?: number;
@@ -243,6 +245,7 @@ export class ProviderSnapshotManager {
   private readonly logger: Logger;
   private readonly workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   private readonly managedProcesses?: ManagedProcessRegistry;
+  private readonly terminalManager?: TerminalManager;
   private readonly openCodeBridge?: OpenCodeBridge;
   private readonly isDev: boolean;
   private readonly extraClients: Partial<Record<AgentProvider, AgentClient>>;
@@ -262,6 +265,7 @@ export class ProviderSnapshotManager {
     );
     this.workspaceGitService = options.workspaceGitService;
     this.managedProcesses = options.managedProcesses;
+    this.terminalManager = options.terminalManager;
     this.openCodeBridge = options.openCodeBridge;
     this.isDev = options.isDev === true;
     this.extraClients = options.extraClients ?? {};
@@ -714,6 +718,7 @@ export class ProviderSnapshotManager {
       pluginProviders: this.pluginProviders.definitions(),
       workspaceGitService: this.workspaceGitService,
       managedProcesses: this.managedProcesses,
+      terminalManager: this.terminalManager,
       openCodeBridge: this.openCodeBridge,
       isDev: this.isDev,
     });

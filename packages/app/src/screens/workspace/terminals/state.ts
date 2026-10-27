@@ -69,12 +69,13 @@ export function collectScriptTerminalIds(input: {
   return terminalIds;
 }
 
+// An agent's terminal, such as a Claude (Terminal) agent's, opens from the agent's tab menu.
 export function collectStandaloneTerminalIds(input: {
   terminals: TerminalEntry[];
   scriptTerminalIds: Set<string>;
 }): string[] {
   return input.terminals
-    .filter((terminal) => !input.scriptTerminalIds.has(terminal.id))
+    .filter((terminal) => !input.scriptTerminalIds.has(terminal.id) && !terminal.agentId)
     .map((terminal) => terminal.id);
 }
 

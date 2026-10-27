@@ -16,6 +16,7 @@ import { resolve, sep } from "node:path";
 import { assertAbsolutePath, isSameOrDescendantPath } from "../server/path-utils.js";
 import type { TerminalActivity, TerminalActivityState } from "@getpaseo/protocol/terminal-activity";
 import { deriveTerminalActivityStatusBucket } from "@getpaseo/protocol/terminal-activity";
+import type { TerminalAgentSession } from "@getpaseo/protocol/messages";
 
 export interface TerminalListItem {
   id: string;
@@ -24,6 +25,8 @@ export interface TerminalListItem {
   workspaceId: string;
   title?: string;
   activity: TerminalActivity | null;
+  agentSession?: TerminalAgentSession;
+  agentId?: string;
 }
 
 export interface TerminalsChangedEvent {
@@ -65,6 +68,8 @@ export interface TerminalManager {
     id?: string;
     cwd: string;
     workspaceId: string;
+    /** The Paseo agent whose provider runs in this terminal. Only the daemon keeps it. */
+    agentId?: string;
     name?: string;
     title?: string;
     env?: Record<string, string>;

@@ -315,6 +315,7 @@ export class TerminalSessionController {
   private toTerminalInfo(terminal: TerminalSession) {
     const title = terminal.getTitle();
     const activity = terminal.getActivity();
+    const agentSession = terminal.getAgentSession();
     return {
       id: terminal.id,
       name: terminal.name,
@@ -323,6 +324,8 @@ export class TerminalSessionController {
       activity,
       createdAt: terminal.createdAt ?? null,
       isScript: this.options.isScriptTerminal?.(terminal) ?? false,
+      ...(agentSession ? { agentSession } : {}),
+      ...(terminal.agentId ? { agentId: terminal.agentId } : {}),
     };
   }
 
