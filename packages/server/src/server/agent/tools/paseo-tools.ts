@@ -46,8 +46,7 @@ import type { FirstAgentContext } from "../../messages.js";
 import { everyMsToFiveFieldCron } from "@getpaseo/protocol/schedule/cadence";
 import { expandUserPath, isSameOrDescendantPath, resolvePathFromBase } from "../../path-utils.js";
 import type { TerminalManager } from "../../../terminal/terminal-manager.js";
-import { encodeTerminalKeyInput } from "@getpaseo/protocol/terminal-key-input";
-import { TerminalInputModeTracker } from "@getpaseo/protocol/terminal-input-mode";
+import { resolveTerminalKeyToken } from "./terminal-key-token.js";
 import type { CreatePaseoWorktreeWorkflowFn } from "../../worktree-session.js";
 import { computeNextRunAt, validateScheduleCadence } from "../../schedule/cron.js";
 import {
@@ -565,46 +564,6 @@ const TerminalSummarySchema = z.object({
   name: z.string(),
   cwd: z.string(),
 });
-
-interface TerminalKeyTokenInput {
-  key: string;
-  literal: boolean;
-  preamble: string;
-}
-
-function resolveTerminalKeyToken({ key, literal, preamble }: TerminalKeyTokenInput): string {
-  if (literal) {
-    return key;
-  }
-
-  const match = /^((?:[CMS]-)*)(.+)$/.exec(key);
-  if (!match) {
-    return key;
-  }
-  const [, modifiers, token] = match;
-  const aliases: Record<string, string> = {
-    Up: "ArrowUp",
-    Down: "ArrowDown",
-    Left: "ArrowLeft",
-    Right: "ArrowRight",
-    BSpace: "Backspace",
-    Space: " ",
-  };
-  const inputMode = new TerminalInputModeTracker();
-  inputMode.feed(preamble);
-  const encodedKey = Object.hasOwn(aliases, token) ? aliases[token] : token;
-  return (
-    encodeTerminalKeyInput(
-      {
-        key: encodedKey,
-        ctrl: modifiers.includes("C-"),
-        alt: modifiers.includes("M-"),
-        shift: modifiers.includes("S-"),
-      },
-      { inputMode: inputMode.getState() },
-    ) || key
-  );
-}
 
 export function createPaseoToolCatalog(options: PaseoToolHostDependencies): PaseoToolCatalog {
   return createToolCatalog(options, options.callerAgentId ? "agent" : "top-level");

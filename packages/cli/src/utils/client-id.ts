@@ -12,8 +12,17 @@ function generateClientId(): string {
   return `cid_${randomUUID().replace(/-/g, "")}`;
 }
 
-export async function getOrCreateCliClientId(home: string): Promise<string> {
-  const clientSessionKeyFile = join(home, "cli-client-id");
+export function getOrCreateCliClientId(home: string): Promise<string> {
+  return getOrCreateClientId(home, "cli-client-id");
+}
+
+/** Kept apart from the CLI's ID: a daemon resumes the session of a repeated client ID. */
+export function getOrCreateMcpGatewayClientId(home: string): Promise<string> {
+  return getOrCreateClientId(home, "mcp-gateway-client-id");
+}
+
+async function getOrCreateClientId(home: string, fileName: string): Promise<string> {
+  const clientSessionKeyFile = join(home, fileName);
 
   try {
     const existing = normalizeClientId(await readFile(clientSessionKeyFile, "utf8"));
