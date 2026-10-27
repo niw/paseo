@@ -1104,3 +1104,44 @@ it("rejects createTerminal and registers nothing when the worker cannot start th
   expect(await manager.getTerminals("/workspace")).toEqual([]);
   expect(snapshots).toEqual([]);
 });
+
+it.skipIf(isPlatform("win32"))(
+  "reports the Claude Code session running in a worker terminal",
+  async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "worker-terminal-manager-agent-session-"));
+    temporaryDirs.push(cwd);
+    const configDir = join(cwd, "claude-config");
+    manager = createWorkerTerminalManager();
+    const terminalsChanged: Array<string | null> = [];
+    manager.subscribeTerminalsChanged((event) => {
+      terminalsChanged.push(event.terminals[0]?.agentSession?.sessionId ?? null);
+    });
+    const session = trackTerminal(
+      await manager.createTerminal({
+        workspaceId: "ws-test",
+        cwd,
+        env: { CLAUDE_CONFIG_DIR: configDir },
+        ...nodeTerminalCommand(`
+        const fs = require("node:fs");
+        const path = require("node:path");
+        const sessionsDir = path.join(process.env.CLAUDE_CONFIG_DIR, "sessions");
+        fs.mkdirSync(sessionsDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(sessionsDir, process.pid + ".json"),
+          JSON.stringify({ pid: process.pid, sessionId: "worker-claude-session" }),
+        );
+        process.stdout.write("\\x1b]7501;state=idle:app=claude-code\\x1b\\\\");
+        setInterval(() => {}, 1000);
+      `),
+      }),
+    );
+
+    await waitForCondition(() => session.getAgentSession() !== null, 10000);
+
+    expect(session.getAgentSession()).toEqual({
+      provider: "claude",
+      sessionId: "worker-claude-session",
+    });
+    expect(terminalsChanged).toContain("worker-claude-session");
+  },
+);

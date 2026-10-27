@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { assertAbsolutePath, isSameOrDescendantPath } from "../server/path-utils.js";
 import type { TerminalState } from "@getpaseo/protocol/messages";
 import type { TerminalActivity, TerminalActivityState } from "@getpaseo/protocol/terminal-activity";
+import type { TerminalAgentSession } from "@getpaseo/protocol/messages";
 import { deriveTerminalActivityStatusBucket } from "@getpaseo/protocol/terminal-activity";
 import type {
   ClientMessage,
@@ -74,6 +75,7 @@ interface WorkerTerminalRecord {
   exitListeners: Set<(info: TerminalExitInfo) => void>;
   commandFinishedListeners: Set<(info: TerminalCommandFinishedInfo) => void>;
   titleChangeListeners: Set<(title?: string) => void>;
+  agentSessionChangeListeners: Set<(agentSession: TerminalAgentSession | null) => void>;
   activityChangeListeners: Set<(transition: TerminalActivityTransition) => void>;
   session: TerminalSession;
 }
@@ -135,6 +137,8 @@ function cloneTerminalInfo(info: RequiredWorkerTerminalInfo): RequiredWorkerTerm
     workspaceId: info.workspaceId,
     ...(info.title ? { title: info.title } : {}),
     activity: info.activity,
+    ...(info.agentSession ? { agentSession: { ...info.agentSession } } : {}),
+    ...(info.agentId ? { agentId: info.agentId } : {}),
   };
 }
 
@@ -215,6 +219,8 @@ export function createWorkerTerminalManager(
         workspaceId: record.info.workspaceId,
         ...(record.info.title ? { title: record.info.title } : {}),
         activity: record.activity,
+        ...(record.info.agentSession ? { agentSession: record.info.agentSession } : {}),
+        ...(record.info.agentId ? { agentId: record.info.agentId } : {}),
       });
     }
     return terminals;
@@ -241,6 +247,7 @@ export function createWorkerTerminalManager(
       exitListeners: new Set(),
       commandFinishedListeners: new Set(),
       titleChangeListeners: new Set(),
+      agentSessionChangeListeners: new Set(),
       activityChangeListeners: new Set(),
       session: undefined as unknown as TerminalSession,
     };
@@ -257,6 +264,9 @@ export function createWorkerTerminalManager(
       },
       get workspaceId() {
         return record.info.workspaceId;
+      },
+      get agentId() {
+        return record.info.agentId;
       },
       send(message: ClientMessage): void {
         if (message.type === "resize") {
@@ -321,6 +331,17 @@ export function createWorkerTerminalManager(
       },
       getActivity(): TerminalActivity | null {
         return record.activity;
+      },
+      getAgentSession(): TerminalAgentSession | null {
+        return record.info.agentSession ?? null;
+      },
+      onAgentSessionChange(
+        listener: (agentSession: TerminalAgentSession | null) => void,
+      ): () => void {
+        record.agentSessionChangeListeners.add(listener);
+        return () => {
+          record.agentSessionChangeListeners.delete(listener);
+        };
       },
       setActivity(state: TerminalActivityState): void {
         record.activity = { state, changedAt: Date.now() };
@@ -483,6 +504,24 @@ export function createWorkerTerminalManager(
     });
   }
 
+  function handleTerminalAgentSessionChangeEvent(
+    message: Extract<TerminalWorkerToParentMessage, { type: "terminalAgentSessionChange" }>,
+  ): void {
+    const record = recordsById.get(message.terminalId);
+    if (!record) {
+      return;
+    }
+    const { agentSession: _previousAgentSession, ...info } = record.info;
+    record.info = message.agentSession ? { ...info, agentSession: message.agentSession } : info;
+    for (const listener of Array.from(record.agentSessionChangeListeners)) {
+      listener(message.agentSession);
+    }
+    emitTerminalsChanged({
+      cwd: record.info.cwd,
+      terminals: listTerminalItemsForCwd(record.info.cwd),
+    });
+  }
+
   function handleTerminalCommandFinishedEvent(
     message: Extract<TerminalWorkerToParentMessage, { type: "terminalCommandFinished" }>,
   ): void {
@@ -504,9 +543,11 @@ export function createWorkerTerminalManager(
     }
     const previousActivity = record.activity;
     record.activity = message.activity;
+    const statusMessage = message.statusMessage ? { statusMessage: message.statusMessage } : {};
     const transition: TerminalActivityTransition = {
       activity: message.activity,
       previous: message.previous,
+      ...statusMessage,
     };
     for (const listener of Array.from(record.activityChangeListeners)) {
       listener(transition);
@@ -518,6 +559,7 @@ export function createWorkerTerminalManager(
       workspaceId: record.info.workspaceId,
       activity: message.activity,
       previous: message.previous,
+      ...statusMessage,
     });
     const previousBucket = deriveTerminalActivityStatusBucket(previousActivity);
     const nextBucket = deriveTerminalActivityStatusBucket(message.activity);
@@ -564,6 +606,11 @@ export function createWorkerTerminalManager(
 
       case "terminalTitleChange": {
         handleTerminalTitleChangeEvent(message);
+        return;
+      }
+
+      case "terminalAgentSessionChange": {
+        handleTerminalAgentSessionChangeEvent(message);
         return;
       }
 

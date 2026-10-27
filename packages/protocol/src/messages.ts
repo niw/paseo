@@ -420,6 +420,7 @@ const AgentCapabilityFlagsSchema: z.ZodType<AgentCapabilityFlags> = z
     supportsRewindFiles: z.boolean().optional().default(false),
     // COMPAT(rewind): added in v0.1.X, drop when floor >= v0.1.X.
     supportsRewindBoth: z.boolean().optional().default(false),
+    supportsTerminal: z.boolean().optional(),
   })
   .catchall(z.boolean());
 
@@ -2089,6 +2090,22 @@ export const AgentRewindResponseMessageSchema = z.object({
   }),
 });
 
+export const AgentTerminalStartRequestMessageSchema = z.object({
+  type: z.literal("agent.terminal.start.request"),
+  agentId: z.string(),
+  requestId: z.string(),
+});
+
+export const AgentTerminalStartResponseMessageSchema = z.object({
+  type: z.literal("agent.terminal.start.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    terminalId: z.string().nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
 export const UpdateAgentResponseMessageSchema = z.object({
   type: z.literal("update_agent_response"),
   payload: AgentActionResponsePayloadSchema,
@@ -3375,6 +3392,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AgentConfigApplyRequestMessageSchema,
   AgentDetachRequestMessageSchema,
   AgentRewindRequestMessageSchema,
+  AgentTerminalStartRequestMessageSchema,
   AgentPermissionResponseMessageSchema,
   CheckoutStatusRequestSchema,
   CheckoutDiffGetRequestSchema,
@@ -6501,6 +6519,15 @@ export const ListCommandsResponseSchema = z.object({
 // Terminal Outbound Messages
 // ============================================================================
 
+// The agent session running in a terminal, such as Claude Code started from its shell.
+// `provider` stays a string so a new provider never breaks an older client.
+export const TerminalAgentSessionSchema = z.object({
+  provider: z.string(),
+  sessionId: z.string(),
+});
+
+export type TerminalAgentSession = z.infer<typeof TerminalAgentSessionSchema>;
+
 const TerminalInfoSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -6508,6 +6535,9 @@ const TerminalInfoSchema = z.object({
   workspaceId: z.string().optional(),
   title: z.string().optional(),
   activity: TerminalActivitySchema.nullable().optional(),
+  agentSession: TerminalAgentSessionSchema.optional(),
+  // The Paseo agent whose provider runs in this terminal, such as a Claude (Terminal) agent.
+  agentId: z.string().optional(),
 });
 
 export const TerminalCellSchema = z.object({
@@ -7108,6 +7138,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentConfigApplyResponseMessageSchema,
   AgentDetachResponseMessageSchema,
   AgentRewindResponseMessageSchema,
+  AgentTerminalStartResponseMessageSchema,
   UpdateAgentResponseMessageSchema,
   ProjectRenameResponseSchema,
   ProjectIconSetResponseSchema,
@@ -7313,6 +7344,9 @@ export type SetAgentFeatureResponseMessage = z.infer<typeof SetAgentFeatureRespo
 export type AgentConfigApplyResponseMessage = z.infer<typeof AgentConfigApplyResponseMessageSchema>;
 export type AgentDetachResponseMessage = z.infer<typeof AgentDetachResponseMessageSchema>;
 export type AgentRewindResponseMessage = z.infer<typeof AgentRewindResponseMessageSchema>;
+export type AgentTerminalStartResponseMessage = z.infer<
+  typeof AgentTerminalStartResponseMessageSchema
+>;
 export type UpdateAgentResponseMessage = z.infer<typeof UpdateAgentResponseMessageSchema>;
 export type ProjectRenameResponse = z.infer<typeof ProjectRenameResponseSchema>;
 export type ProjectIconSetResponse = z.infer<typeof ProjectIconSetResponseSchema>;

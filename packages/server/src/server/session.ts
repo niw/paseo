@@ -2762,6 +2762,8 @@ export class Session {
     switch (msg.type) {
       case "agent.detach.request":
         return this.handleDetachAgentRequest(msg.agentId, msg.requestId);
+      case "agent.terminal.start.request":
+        return this.handleAgentTerminalStartRequest(msg.agentId, msg.requestId);
       default:
         return undefined;
     }
@@ -4872,6 +4874,37 @@ export class Session {
     }
   }
 
+  // NOTE: An agent resumed from storage starts its terminal on the next prompt, so opening
+  // the terminal loads the agent and starts it here.
+  private async handleAgentTerminalStartRequest(agentId: string, requestId: string): Promise<void> {
+    try {
+      await ensureUnarchivedAgentLoaded(agentId, {
+        agentManager: this.agentManager,
+        agentStorage: this.agentStorage,
+        logger: this.sessionLogger,
+      });
+      const terminalId = await this.agentManager.startAgentTerminal(agentId);
+      this.emit({
+        type: "agent.terminal.start.response",
+        payload: { requestId, agentId, terminalId, error: null },
+      });
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, agentId, requestId },
+        "Failed to start agent terminal",
+      );
+      this.emit({
+        type: "agent.terminal.start.response",
+        payload: {
+          requestId,
+          agentId,
+          terminalId: null,
+          error: getErrorMessageOr(error, "Failed to start agent terminal"),
+        },
+      });
+    }
+  }
+
   private deliverTimelineReplacement(agentId: string, initiatingSource?: object): void {
     const agent = this.agentManager.getAgent(agentId);
     if (!agent) return;
@@ -5020,6 +5053,9 @@ export class Session {
     if (msg.appVisible && focusedTerminalId) {
       void this.clearFocusedTerminalAttention(focusedTerminalId);
     }
+    if (msg.appVisible && msg.focusedAgentId) {
+      void this.clearFocusedAgentTerminalAttention(msg.focusedAgentId);
+    }
     if (metadata.pushToken) {
       this.pushNotifications.renew(metadata.pushToken);
     }
@@ -5034,6 +5070,26 @@ export class Session {
       await terminalManager.clearTerminalAttention(terminalId);
     } catch (error) {
       this.sessionLogger.warn({ err: error, terminalId }, "Failed to clear terminal attention");
+    }
+  }
+
+  // An agent that drives its own terminal, such as Claude (Terminal), shows that
+  // terminal only on request, so viewing the agent counts as viewing the terminal.
+  private async clearFocusedAgentTerminalAttention(agentId: string): Promise<void> {
+    const terminalManager = this.terminalManager;
+    const agent = this.agentManager.getAgent(agentId);
+    if (!terminalManager || !agent) {
+      return;
+    }
+    try {
+      const terminals = await terminalManager.getTerminals(agent.cwd);
+      await Promise.all(
+        terminals
+          .filter((terminal) => terminal.agentId === agentId)
+          .map((terminal) => terminalManager.clearTerminalAttention(terminal.id)),
+      );
+    } catch (error) {
+      this.sessionLogger.warn({ err: error, agentId }, "Failed to clear agent terminal attention");
     }
   }
 

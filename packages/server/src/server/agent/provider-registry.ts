@@ -27,6 +27,7 @@ import { normalizeAgentModelDefinition } from "./agent-sdk-types.js";
 import { runProviderRefreshActivity } from "./provider-refresh-deadline.js";
 import type { WorkspaceGitService } from "../workspace-git-service.js";
 import type { ManagedProcessRegistry } from "../managed-processes/managed-processes.js";
+import type { TerminalManager } from "../../terminal/terminal-manager.js";
 import type {
   AgentProviderRuntimeSettingsMap,
   ProviderOverride,
@@ -34,6 +35,7 @@ import type {
   ProviderRuntimeSettings,
 } from "./provider-launch-config.js";
 import { ClaudeAgentClient } from "./providers/claude/agent.js";
+import { ClaudeTerminalAgentClient } from "./providers/claude/terminal/agent.js";
 import { CodexAppServerAgentClient } from "./providers/codex-app-server-agent.js";
 import { CopilotACPAgentClient } from "./providers/copilot-acp-agent.js";
 import { CursorACPAgentClient } from "./providers/cursor-acp-agent.js";
@@ -109,6 +111,7 @@ export interface BuildProviderRegistryOptions {
   providerOverrides?: Record<string, ProviderOverride>;
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   managedProcesses?: ManagedProcessRegistry;
+  terminalManager?: TerminalManager;
   isDev?: boolean;
   ompRuntime?: OmpRuntime;
   openCodeBridge?: OpenCodeBridge;
@@ -116,7 +119,7 @@ export interface BuildProviderRegistryOptions {
 
 interface ProviderClientFactoryOptions extends Pick<
   BuildProviderRegistryOptions,
-  "workspaceGitService" | "managedProcesses" | "ompRuntime"
+  "workspaceGitService" | "managedProcesses" | "ompRuntime" | "terminalManager"
 > {
   openCodeBridge?: OpenCodeBridge;
   customProvider?: {
@@ -191,6 +194,12 @@ const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
     new ClaudeAgentClient({
       logger,
       runtimeSettings,
+    }),
+  "claude-terminal": (logger, runtimeSettings, options) =>
+    new ClaudeTerminalAgentClient({
+      logger,
+      runtimeSettings,
+      terminalManager: options?.terminalManager,
     }),
   codex: (logger, runtimeSettings, options) =>
     new CodexAppServerAgentClient(logger, runtimeSettings, {
@@ -477,6 +486,7 @@ export function wrapSessionProvider(provider: AgentProvider, inner: AgentSession
     revertConversation: inner.revertConversation?.bind(inner),
     revertFiles: inner.revertFiles?.bind(inner),
     revertBoth: inner.revertBoth?.bind(inner),
+    startTerminal: inner.startTerminal?.bind(inner),
     tryHandleOutOfBand: inner.tryHandleOutOfBand?.bind(inner),
   } satisfies ForwardedAgentSession;
 }
@@ -760,7 +770,7 @@ function buildResolvedBuiltinProviders(
   runtimeSettings: AgentProviderRuntimeSettingsMap | undefined,
   options: Pick<
     BuildProviderRegistryOptions,
-    "workspaceGitService" | "managedProcesses" | "ompRuntime" | "openCodeBridge"
+    "workspaceGitService" | "managedProcesses" | "ompRuntime" | "openCodeBridge" | "terminalManager"
   >,
   isDev: boolean,
 ): Map<string, ResolvedProvider> {
@@ -785,6 +795,7 @@ function buildResolvedBuiltinProviders(
             managedProcesses: options.managedProcesses,
             ompRuntime: options.ompRuntime,
             openCodeBridge: options.openCodeBridge,
+            terminalManager: options.terminalManager,
           }),
         contract: PROVIDER_CONTRACTS[definition.id] ?? UNSUPPORTED_PROVIDER_CONTRACT,
       }),
@@ -797,7 +808,10 @@ function buildResolvedBuiltinProviders(
 function addDerivedProviders(
   resolvedProviders: Map<string, ResolvedProvider>,
   providerOverrides: Record<string, ProviderOverride>,
-  options: Pick<BuildProviderRegistryOptions, "managedProcesses" | "openCodeBridge">,
+  options: Pick<
+    BuildProviderRegistryOptions,
+    "managedProcesses" | "openCodeBridge" | "terminalManager"
+  >,
 ): void {
   for (const [providerId, override] of Object.entries(providerOverrides)) {
     if (resolvedProviders.has(providerId) || BUILTIN_PROVIDER_IDS.includes(providerId)) {
@@ -894,6 +908,7 @@ function addDerivedProviders(
         baseFactory(logger, mergedRuntimeSettings, {
           managedProcesses: options.managedProcesses,
           openCodeBridge: options.openCodeBridge,
+          terminalManager: options.terminalManager,
           customProvider: {
             id: providerId,
             label: override.label ?? providerId,
@@ -911,16 +926,18 @@ export function buildProviderRegistry(
 ): Record<AgentProvider, ProviderDefinition> {
   const runtimeSettings = options?.runtimeSettings;
   const providerOverrides = options?.providerOverrides ?? {};
+  const clientOptions: BuildProviderRegistryOptions = options ?? {};
   const resolvedProviders = buildResolvedBuiltinProviders(
     providerOverrides,
     runtimeSettings,
     {
-      workspaceGitService: options?.workspaceGitService,
-      managedProcesses: options?.managedProcesses,
-      ompRuntime: options?.ompRuntime,
-      openCodeBridge: options?.openCodeBridge,
+      workspaceGitService: clientOptions.workspaceGitService,
+      managedProcesses: clientOptions.managedProcesses,
+      ompRuntime: clientOptions.ompRuntime,
+      openCodeBridge: clientOptions.openCodeBridge,
+      terminalManager: clientOptions.terminalManager,
     },
-    options?.isDev === true,
+    clientOptions.isDev === true,
   );
   for (const [provider, definition] of Object.entries(options?.pluginProviders ?? {})) {
     if (resolvedProviders.has(provider)) {
@@ -947,8 +964,9 @@ export function buildProviderRegistry(
     );
   }
   addDerivedProviders(resolvedProviders, providerOverrides, {
-    managedProcesses: options?.managedProcesses,
-    openCodeBridge: options?.openCodeBridge,
+    managedProcesses: clientOptions.managedProcesses,
+    openCodeBridge: clientOptions.openCodeBridge,
+    terminalManager: clientOptions.terminalManager,
   });
 
   return Object.fromEntries(

@@ -3305,6 +3305,21 @@ export class DaemonClient {
     }
   }
 
+  /** Starts the terminal the agent runs in unless it runs, and returns its ID. */
+  async startAgentTerminal(agentId: string): Promise<string> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"agent.terminal.start.response">({
+        message: {
+          type: "agent.terminal.start.request",
+          agentId,
+        },
+      });
+    if (payload.terminalId === null) {
+      throw new Error(payload.error ?? "startAgentTerminal rejected");
+    }
+    return payload.terminalId;
+  }
+
   async updateAgent(
     agentId: string,
     updates: { name?: string; labels?: Record<string, string> },

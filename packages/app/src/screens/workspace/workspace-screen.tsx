@@ -1211,6 +1211,7 @@ function WorkspaceScreenContent({
     queryKey: terminalsQueryKey,
     removeTerminalFromCache,
     standaloneTerminalIds,
+    terminals,
   } = useWorkspaceTerminals({
     client,
     isConnected,
@@ -1917,9 +1918,21 @@ function WorkspaceScreenContent({
 
   const killTerminalAsync = killTerminalMutation.mutateAsync;
 
+  const agentTerminalIds = useMemo(
+    () => new Set(terminals.filter((terminal) => terminal.agentId).map((terminal) => terminal.id)),
+    [terminals],
+  );
+
   const handleCloseTerminalTab = useCallback(
     async (input: { tabId: string; terminalId: string }) => {
       const { tabId, terminalId } = input;
+      // An agent's terminal keeps running for the agent, so closing its tab only hides it.
+      if (agentTerminalIds.has(terminalId)) {
+        await closeTab(tabId, async () => {
+          closeWorkspaceTabWithCleanup({ tabId, target: { kind: "terminal", terminalId } });
+        });
+        return;
+      }
       await closeTab(tabId, async () => {
         const confirmed = await confirmDialog({
           title: t("workspace.tabs.confirmations.closeTerminalTitle"),
@@ -1945,6 +1958,7 @@ function WorkspaceScreenContent({
       });
     },
     [
+      agentTerminalIds,
       closeTab,
       closeWorkspaceTabWithCleanup,
       invalidateTerminals,
@@ -2254,10 +2268,18 @@ function WorkspaceScreenContent({
         return true;
       }
 
-      const groups = classifyBulkClosableTabs(tabsToClose, (agentId) => {
-        const agent = useSessionStore.getState().sessions[normalizedServerId]?.agents?.get(agentId);
-        return resolveCloseAgentTabPolicy(agent).kind === "layout-only" ? "layout-only" : "archive";
-      });
+      const groups = classifyBulkClosableTabs(
+        tabsToClose,
+        (agentId) => {
+          const agent = useSessionStore
+            .getState()
+            .sessions[normalizedServerId]?.agents?.get(agentId);
+          return resolveCloseAgentTabPolicy(agent).kind === "layout-only"
+            ? "layout-only"
+            : "archive";
+        },
+        (terminalId) => agentTerminalIds.has(terminalId),
+      );
       const modifiedCount = tabsToClose.filter(
         (tab) =>
           getPanelInstanceAttributes({
@@ -2316,6 +2338,7 @@ function WorkspaceScreenContent({
       return true;
     },
     [
+      agentTerminalIds,
       archiveAgent,
       bulkCloseConfirmationLabels,
       client,

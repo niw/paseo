@@ -348,7 +348,6 @@
         "packages/app/src/hooks/use-keyboard-shortcut-overrides.ts",
         "packages/app/src/hooks/use-preferred-editor.ts",
         "packages/app/src/hooks/use-settings/index.ts",
-        "packages/app/src/panels/terminal-panel.tsx",
         "packages/app/src/projects/icons.ts",
         "packages/app/src/provider-usage/use-provider-usage.ts",
         "packages/app/src/screens/project-settings-screen.tsx",

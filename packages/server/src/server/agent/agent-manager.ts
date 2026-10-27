@@ -288,6 +288,7 @@ export type AgentAttentionCallback = (params: {
   agentId: string;
   provider: AgentProvider;
   reason: "finished" | "error" | "permission";
+  message?: string;
 }) => void;
 
 export type AgentArchivedCallback = (agentId: string) => Promise<void> | void;
@@ -579,6 +580,14 @@ function normalizePersistenceForConfig(
       ...(config.mcpServers ? { mcpServers: config.mcpServers } : {}),
     },
   };
+}
+
+interface AgentSessionOpening {
+  reason: PluginSessionOpenRequest["reason"];
+  purpose: PluginSessionOpenRequest["purpose"];
+  workspaceId?: string | null;
+  title?: string | null;
+  labels?: Record<string, string>;
 }
 
 interface SubscriptionRecord {
@@ -2367,6 +2376,16 @@ export class AgentManager {
       throw new Error(`Agent not found in storage after detach: ${agentId}`);
     }
     return { record: result.record, live: false, previousParentAgentId };
+  }
+
+  /** Starts the terminal the agent runs in unless it runs, and returns its ID. */
+  async startAgentTerminal(agentId: string): Promise<string> {
+    const agent = this.requireSessionAgent(agentId);
+    if (!agent.session.capabilities.supportsTerminal || !agent.session.startTerminal) {
+      throw new Error(`Agent '${agentId}' does not run in a terminal`);
+    }
+    const terminal = await agent.session.startTerminal();
+    return terminal.id;
   }
 
   notifyAgentState(agentId: string): void {
@@ -4627,6 +4646,12 @@ export class AgentManager {
       case "thread_started":
         this.onStreamThreadStarted(agent);
         return undefined;
+      case "history_reset":
+        flags.shouldDispatchEvent = false;
+        void this.replaceTimelineFromProvider(agent).catch((error: unknown) => {
+          this.logger.warn({ err: error, agentId: agent.id }, "Failed to rebuild the timeline");
+        });
+        return undefined;
       case "usage_updated":
         agent.lastUsage = event.usage;
         this.emitState(agent);
@@ -4653,15 +4678,7 @@ export class AgentManager {
         this.emitState(agent);
         return undefined;
       case "thinking_option_changed":
-        agent.config.thinkingOptionId = event.thinkingOptionId ?? undefined;
-        if (agent.runtimeInfo) {
-          agent.runtimeInfo = {
-            ...agent.runtimeInfo,
-            thinkingOptionId: event.thinkingOptionId,
-          };
-        }
-        flags.shouldDispatchEvent = false;
-        this.emitState(agent);
+        this.onStreamThinkingOptionChanged(agent, event, flags);
         return undefined;
       case "timeline":
         return this.onStreamTimelineEvent({ agent, event, options, flags });
@@ -4702,9 +4719,27 @@ export class AgentManager {
       case "permission_resolved":
         this.onStreamPermissionResolved({ agent, event, options, flags });
         return undefined;
+      case "attention_required":
+        this.onStreamAttentionRequired(agent, event, flags);
+        return undefined;
       default:
         return undefined;
     }
+  }
+
+  // Rebuilds the timeline like a rewind from Paseo does, for a history that changed outside it.
+  private async replaceTimelineFromProvider(agent: ActiveManagedAgent): Promise<void> {
+    await this.hydrateTimelineFromProvider(agent.id, {
+      force: true,
+      broadcast: true,
+      broadcastTimeline: false,
+    });
+    this.dispatch({
+      type: "timeline_replacement",
+      agentId: agent.id,
+      epoch: this.timelineStore.getEpoch(agent.id),
+    });
+    await this.persistSnapshot(agent);
   }
 
   private onStreamThreadStarted(agent: ActiveManagedAgent): void {
@@ -4922,6 +4957,34 @@ export class AgentManager {
       this.broadcastAgentAttention(agent, "permission");
     }
     this.emitState(agent);
+  }
+
+  private onStreamThinkingOptionChanged(
+    agent: ActiveManagedAgent,
+    event: Extract<AgentStreamEvent, { type: "thinking_option_changed" }>,
+    flags: StreamEventFlags,
+  ): void {
+    agent.config.thinkingOptionId = event.thinkingOptionId ?? undefined;
+    if (agent.runtimeInfo) {
+      agent.runtimeInfo = {
+        ...agent.runtimeInfo,
+        thinkingOptionId: event.thinkingOptionId,
+      };
+    }
+    flags.shouldDispatchEvent = false;
+    this.emitState(agent);
+  }
+
+  // The broadcast carries the attention to clients, so the provider's event is not dispatched.
+  private onStreamAttentionRequired(
+    agent: ActiveManagedAgent,
+    event: Extract<AgentStreamEvent, { type: "attention_required" }>,
+    flags: StreamEventFlags,
+  ): void {
+    flags.shouldDispatchEvent = false;
+    if (!agent.internal) {
+      this.broadcastAgentAttention(agent, event.reason, event.message);
+    }
   }
 
   private onStreamPermissionResolved(params: {
@@ -5306,6 +5369,7 @@ export class AgentManager {
   private broadcastAgentAttention(
     agent: ManagedAgent,
     reason: "finished" | "error" | "permission",
+    message?: string,
   ): void {
     if (isDelegatedAgent(agent)) {
       return;
@@ -5315,6 +5379,7 @@ export class AgentManager {
       agentId: agent.id,
       provider: agent.provider,
       reason,
+      ...(message ? { message } : {}),
     });
   }
 
@@ -5525,47 +5590,25 @@ export class AgentManager {
     cwd: string,
     paseoToolPolicy: ProviderPaseoToolsPolicy | undefined,
     env?: Record<string, string>,
-    opening?: {
-      reason: PluginSessionOpenRequest["reason"];
-      purpose: PluginSessionOpenRequest["purpose"];
-      workspaceId?: string | null;
-      title?: string | null;
-      labels?: Record<string, string>;
-    },
+    opening?: AgentSessionOpening,
   ): Promise<AgentLaunchContext> {
     // A plugin changing during this open must still make the resulting session stale.
     const generation = this.sessionOpenGeneration;
     this.detachPluginTools(agentId);
-    let mcpServers: AgentSessionConfig["mcpServers"];
-    let mcpServerOwners: Record<string, string> | undefined;
-    if (this.pluginLifecycle) {
-      const request = {
-        agentId,
-        provider: client.provider,
-        cwd,
-        workspaceId: opening?.workspaceId ?? null,
-        reason: opening?.reason ?? "resume",
-        purpose: opening?.purpose ?? "interactive",
-        env: { ...env },
-        title: opening?.title ?? null,
-        labels: opening?.labels ?? {},
-        tools: [],
-        mcpServers: {},
-      };
-      const transformed = await this.pluginLifecycle.before("agent.session_open", request);
-      env = transformed.env;
-      if (request.purpose === "interactive") {
-        this.attachedPluginTools.set(agentId, transformed.tools as AttachedAgentTool[]);
-        mcpServers = transformed.mcpServers;
-        mcpServerOwners = transformed.mcpServerOwners;
-      }
-    }
+    const { mcpServers, mcpServerOwners, ...opened } = await this.openPluginSession(
+      agentId,
+      client,
+      cwd,
+      env,
+      opening,
+    );
     const context: AgentLaunchContext = {
       agentId,
       mcpServers,
       mcpServerOwners,
+      ...(opening?.workspaceId ? { workspaceId: opening.workspaceId } : {}),
       env: {
-        ...env,
+        ...opened.env,
         PASEO_AGENT_ID: agentId,
         PASEO_AGENT_CWD: cwd,
       },
@@ -5591,6 +5634,45 @@ export class AgentManager {
     }
     this.sessionOpenGenerations.set(agentId, generation);
     return context;
+  }
+
+  private async openPluginSession(
+    agentId: string,
+    client: AgentClient,
+    cwd: string,
+    env: Record<string, string> | undefined,
+    opening: AgentSessionOpening | undefined,
+  ): Promise<{
+    env: Record<string, string> | undefined;
+    mcpServers?: AgentSessionConfig["mcpServers"];
+    mcpServerOwners?: Record<string, string>;
+  }> {
+    if (!this.pluginLifecycle) {
+      return { env };
+    }
+    const request = {
+      agentId,
+      provider: client.provider,
+      cwd,
+      workspaceId: opening?.workspaceId ?? null,
+      reason: opening?.reason ?? "resume",
+      purpose: opening?.purpose ?? "interactive",
+      env: { ...env },
+      title: opening?.title ?? null,
+      labels: opening?.labels ?? {},
+      tools: [],
+      mcpServers: {},
+    };
+    const transformed = await this.pluginLifecycle.before("agent.session_open", request);
+    if (request.purpose !== "interactive") {
+      return { env: transformed.env };
+    }
+    this.attachedPluginTools.set(agentId, transformed.tools as AttachedAgentTool[]);
+    return {
+      env: transformed.env,
+      mcpServers: transformed.mcpServers,
+      mcpServerOwners: transformed.mcpServerOwners,
+    };
   }
 
   private resolveProviderLaunchConfig(

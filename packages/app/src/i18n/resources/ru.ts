@@ -658,6 +658,7 @@ export const ru: TranslationResources = {
         openFor: "Открыть меню для {{label}}",
         copyResumeCommand: "Копировать команду продолжения",
         copyAgentId: "Скопировать идентификатор агента",
+        openTerminal: "Открыть терминал",
         copyTerminalId: "Скопировать идентификатор терминала",
         copyFilePath: "Скопировать путь к файлу",
         rename: "Переименовать",

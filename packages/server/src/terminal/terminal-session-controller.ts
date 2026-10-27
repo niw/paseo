@@ -36,6 +36,7 @@ import {
   type TerminalRestoreOptions,
 } from "./terminal-restore.js";
 import type { TerminalSession } from "./terminal.js";
+import type { TerminalAgentSession } from "@getpaseo/protocol/messages";
 import type { TerminalManager, TerminalsChangedEvent } from "./terminal-manager.js";
 import { applyTerminalSize } from "./terminal-size-ownership.js";
 import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
@@ -308,22 +309,30 @@ export class TerminalSessionController {
   }
 
   private toTerminalInfo(
-    terminal: Pick<TerminalSession, "id" | "name" | "workspaceId" | "getTitle" | "getActivity">,
+    terminal: Pick<
+      TerminalSession,
+      "id" | "name" | "workspaceId" | "agentId" | "getTitle" | "getActivity" | "getAgentSession"
+    >,
   ): {
     id: string;
     name: string;
     workspaceId: string;
     title?: string;
     activity: TerminalActivity | null;
+    agentSession?: TerminalAgentSession;
+    agentId?: string;
   } {
     const title = terminal.getTitle();
     const activity = terminal.getActivity();
+    const agentSession = terminal.getAgentSession();
     return {
       id: terminal.id,
       name: terminal.name,
       workspaceId: terminal.workspaceId,
       ...(title ? { title } : {}),
       activity,
+      ...(agentSession ? { agentSession } : {}),
+      ...(terminal.agentId ? { agentId: terminal.agentId } : {}),
     };
   }
 

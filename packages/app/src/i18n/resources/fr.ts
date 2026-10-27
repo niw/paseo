@@ -657,6 +657,7 @@ export const fr: TranslationResources = {
         openFor: "Ouvrir le menu de {{label}}",
         copyResumeCommand: "Copier la commande de reprise",
         copyAgentId: "Copier l’ID de l’agent",
+        openTerminal: "Ouvrir le terminal",
         copyTerminalId: "Copier l’ID du terminal",
         copyFilePath: "Copier le chemin du fichier",
         rename: "Renommer",

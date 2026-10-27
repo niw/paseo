@@ -196,6 +196,76 @@ process.stdin.on("data", (chunk) => {
 process.stdout.write("\\x1b]11;?\\x07");
 `;
 
+const PROGRAM_STATUS_HELPER_SCRIPT = `process.stdin.setRawMode(true);
+process.stdin.resume();
+let buf = "";
+const timer = setTimeout(() => {
+  process.stdout.write("PROGRAM_STATUS_TIMEOUT\\n");
+  process.exit(2);
+}, 2500);
+process.stdin.on("data", (chunk) => {
+  buf += chunk.toString("binary");
+  const match = buf.match(/\\x1b\\]7501;\\?[^\\x1b\\x07]*(\\x1b\\\\|\\x07)/);
+  if (!match) {
+    return;
+  }
+  clearTimeout(timer);
+  process.stdout.write("\\x1b]7501;state=blocked:app=claude-code:kind=permission:msg=YXBwcm92ZSBCYXNoOiBscw==\\x1b\\\\");
+  process.stdout.write("PROGRAM_STATUS_OK:" + match[0].replace(/\\x1b/g, "ESC") + "\\n");
+  process.exit(0);
+});
+process.stdout.write("\\x1b]7501;?\\x1b\\\\");
+`;
+
+const WORKING_PROGRAM_STATUS_HELPER_SCRIPT = `process.stdin.setRawMode(true);
+process.stdin.resume();
+process.stdout.write("\\x1b]7501;state=working:app=claude-code\\x1b\\\\");
+process.stdin.on("data", () => {
+  process.stdout.write("KEY_RECEIVED\\n");
+});
+`;
+
+const FAKE_CLAUDE_HELPER_SCRIPT = `const fs = require("node:fs");
+const path = require("node:path");
+const sessionsDir = path.join(process.env.CLAUDE_CONFIG_DIR, "sessions");
+fs.mkdirSync(sessionsDir, { recursive: true });
+fs.writeFileSync(
+  path.join(sessionsDir, process.pid + ".json"),
+  JSON.stringify({ pid: process.pid, sessionId: "fake-claude-session", kind: "interactive" }),
+);
+process.stdin.setRawMode(true);
+process.stdin.resume();
+process.stdin.on("data", () => {
+  process.stdout.write("\\x1b]7501;state=clear\\x1b\\\\");
+  process.exit(0);
+});
+process.stdout.write("\\x1b]7501;state=idle:app=claude-code\\x1b\\\\");
+`;
+
+function writeFakeClaudeHelper(prefix: string): { helperPath: string; configDir: string } {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  temporaryDirs.push(dir);
+  const helperPath = join(dir, "fake-claude.cjs");
+  writeFileSync(helperPath, FAKE_CLAUDE_HELPER_SCRIPT);
+  return { helperPath, configDir: join(dir, "claude-config") };
+}
+
+function writeProgramStatusHelper(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  temporaryDirs.push(dir);
+  const path = join(dir, "helper.cjs");
+  writeFileSync(path, PROGRAM_STATUS_HELPER_SCRIPT);
+  return path;
+}
+
+function isProgramStatusOkLine(line: string): boolean {
+  return line.startsWith("PROGRAM_STATUS_OK:");
+}
+
+function hasProgramStatusOkLine(state: ReturnType<TerminalSession["getState"]>): boolean {
+  return getLines(state).some(isProgramStatusOkLine);
+}
+
 function writeDaHelper(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   temporaryDirs.push(dir);
@@ -1065,6 +1135,113 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
 
       const ack = getLines(session.getState()).find(isOsc11OkLine) ?? "";
       expect(ack).toBe("OSC11_OK:ESC]11;rgb:0b0b/0b0b/0b0bESC\\");
+    });
+
+    it("answers OSC 7501 feature detection and applies program status reports", async () => {
+      const helperPath = writeProgramStatusHelper("terminal-program-status-helper-");
+
+      const session = trackSession(
+        await createTerminal({
+          workspaceId: "ws-test",
+          cwd: "/tmp",
+          shell: "/bin/sh",
+          env: { PS1: "$ " },
+        }),
+      );
+      await waitForLines(session, ["$"]);
+      const statusMessages: Array<string | undefined> = [];
+      session.onActivityChange((transition) => statusMessages.push(transition.statusMessage));
+
+      session.send({ type: "input", data: `${process.execPath} ${helperPath}\r` });
+      await waitForState(session, hasProgramStatusOkLine);
+
+      const ack = getLines(session.getState()).find(isProgramStatusOkLine) ?? "";
+      expect(ack).toBe("PROGRAM_STATUS_OK:ESC]7501;?ESC\\");
+      expect(session.getActivity()).toMatchObject({
+        state: "idle",
+        attentionReason: "needs_input",
+      });
+      expect(statusMessages).toEqual(["approve Bash: ls"]);
+      expect(getLines(session.getState()).join("\n")).not.toContain("7501;state");
+    });
+
+    it("keeps a blocked program's attention when the terminal is focused", async () => {
+      const helperPath = writeProgramStatusHelper("terminal-program-status-blocked-");
+
+      const session = trackSession(
+        await createTerminal({
+          workspaceId: "ws-test",
+          cwd: "/tmp",
+          shell: "/bin/sh",
+          env: { PS1: "$ " },
+        }),
+      );
+      await waitForLines(session, ["$"]);
+      session.send({ type: "input", data: `${process.execPath} ${helperPath}\r` });
+      await waitForState(session, hasProgramStatusOkLine);
+
+      expect(session.clearActivityAttention()).toBe(false);
+      expect(session.getActivity()).toMatchObject({
+        state: "idle",
+        attentionReason: "needs_input",
+      });
+    });
+
+    it("keeps program status activity when an interrupt key is sent", async () => {
+      const dir = mkdtempSync(join(tmpdir(), "terminal-program-status-working-"));
+      temporaryDirs.push(dir);
+      const helperPath = join(dir, "working.cjs");
+      writeFileSync(helperPath, WORKING_PROGRAM_STATUS_HELPER_SCRIPT);
+
+      const session = trackSession(
+        await createTerminal({
+          workspaceId: "ws-test",
+          cwd: "/tmp",
+          shell: "/bin/sh",
+          env: { PS1: "$ " },
+        }),
+      );
+      await waitForLines(session, ["$"]);
+      session.send({ type: "input", data: `${process.execPath} ${helperPath}\r` });
+      await waitForState(session, () => session.getActivity()?.state === "working");
+
+      session.send({ type: "input", data: "\x1b" });
+      await waitForState(session, () =>
+        getLines(session.getState()).some((line) => line.includes("KEY_RECEIVED")),
+      );
+
+      expect(session.getActivity()).toMatchObject({ state: "working" });
+    });
+
+    it("links the Claude Code session running in the terminal", async () => {
+      const { helperPath, configDir } = writeFakeClaudeHelper("terminal-agent-session-");
+
+      const session = trackSession(
+        await createTerminal({
+          workspaceId: "ws-test",
+          cwd: "/tmp",
+          shell: "/bin/sh",
+          env: { PS1: "$ ", CLAUDE_CONFIG_DIR: configDir },
+        }),
+      );
+      await waitForLines(session, ["$"]);
+      const agentSessions: Array<string | null> = [];
+      session.onAgentSessionChange((agentSession) =>
+        agentSessions.push(agentSession?.sessionId ?? null),
+      );
+
+      session.send({ type: "input", data: `${process.execPath} ${helperPath}\r` });
+      await waitForState(session, () => session.getAgentSession() !== null);
+
+      expect(session.getAgentSession()).toEqual({
+        provider: "claude",
+        sessionId: "fake-claude-session",
+      });
+
+      session.send({ type: "input", data: "q" });
+      await waitForState(session, () => session.getAgentSession() === null);
+
+      expect(agentSessions).toEqual(["fake-claude-session", null]);
     });
   });
 

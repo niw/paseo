@@ -1625,6 +1625,69 @@ describe("agent detach RPC", () => {
   });
 });
 
+describe("agent terminal start RPC", () => {
+  test("starts the agent's terminal and returns its ID", async () => {
+    const messages: unknown[] = [];
+    const startAgentTerminal = vi.fn().mockResolvedValue("terminal-1");
+    const session = createSessionForTest({
+      messages,
+      agentManager: {
+        getAgent: vi.fn(() => ({ id: "agent-1" })),
+        waitForAgentClose: vi.fn().mockResolvedValue(undefined),
+        startAgentTerminal,
+      },
+      agentStorage: {
+        get: vi.fn().mockResolvedValue(null),
+      },
+    });
+
+    await session.handleMessage({
+      type: "agent.terminal.start.request",
+      agentId: "agent-1",
+      requestId: "start-1",
+    });
+
+    expect(startAgentTerminal).toHaveBeenCalledWith("agent-1");
+    expect(messages).toContainEqual({
+      type: "agent.terminal.start.response",
+      payload: { requestId: "start-1", agentId: "agent-1", terminalId: "terminal-1", error: null },
+    });
+  });
+
+  test("reports why the terminal did not start", async () => {
+    const messages: unknown[] = [];
+    const session = createSessionForTest({
+      messages,
+      agentManager: {
+        getAgent: vi.fn(() => ({ id: "agent-1" })),
+        waitForAgentClose: vi.fn().mockResolvedValue(undefined),
+        startAgentTerminal: vi
+          .fn()
+          .mockRejectedValue(new Error("Agent 'agent-1' does not run in a terminal")),
+      },
+      agentStorage: {
+        get: vi.fn().mockResolvedValue(null),
+      },
+    });
+
+    await session.handleMessage({
+      type: "agent.terminal.start.request",
+      agentId: "agent-1",
+      requestId: "start-1",
+    });
+
+    expect(messages).toContainEqual({
+      type: "agent.terminal.start.response",
+      payload: {
+        requestId: "start-1",
+        agentId: "agent-1",
+        terminalId: null,
+        error: "Agent 'agent-1' does not run in a terminal",
+      },
+    });
+  });
+});
+
 function createProjectRecord(rootPath: string, archivedAt: string | null = null) {
   return {
     projectId: `project:${rootPath}`,

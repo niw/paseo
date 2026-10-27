@@ -23,6 +23,8 @@ interface BuildAgentAttentionNotificationPayloadInput {
   agentId: string;
   assistantMessage?: string | null;
   permissionRequest?: NotificationPermissionRequest | null;
+  /** Describes the attention when the reason's own source has nothing to show. */
+  message?: string | null;
 }
 
 export interface NotificationPermissionRequest {
@@ -197,7 +199,7 @@ export function buildAgentAttentionNotificationPayload(
   input: BuildAgentAttentionNotificationPayloadInput,
 ): AgentAttentionNotificationPayload {
   const title = resolveAgentAttentionTitle(input.reason);
-  const preview = resolveAgentAttentionPreview(input);
+  const preview = resolveAgentAttentionPreview(input) ?? buildNotificationPreview(input.message);
   const body = preview ?? resolveAgentAttentionFallbackBody(input.reason);
 
   return {

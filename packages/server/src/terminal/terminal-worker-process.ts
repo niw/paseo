@@ -69,6 +69,8 @@ function toTerminalInfo(session: TerminalSession): WorkerTerminalInfo {
     workspaceId: session.workspaceId,
     ...(session.getTitle() ? { title: session.getTitle() } : {}),
     activity: session.getActivity(),
+    ...(session.getAgentSession() ? { agentSession: session.getAgentSession() ?? undefined } : {}),
+    ...(session.agentId ? { agentId: session.agentId } : {}),
   };
 }
 
@@ -170,6 +172,13 @@ function watchTerminal(session: TerminalSession): void {
       title,
     });
   });
+  const unsubscribeAgentSession = session.onAgentSessionChange((agentSession) => {
+    sendToParent({
+      type: "terminalAgentSessionChange",
+      terminalId: session.id,
+      agentSession,
+    });
+  });
   const unsubscribeCommandFinished = session.onCommandFinished((info) => {
     outputCoalescer.flush();
     sendToParent({
@@ -184,6 +193,7 @@ function watchTerminal(session: TerminalSession): void {
       terminalId: session.id,
       activity: transition.activity,
       previous: transition.previous,
+      ...(transition.statusMessage ? { statusMessage: transition.statusMessage } : {}),
     });
   });
 
@@ -191,6 +201,7 @@ function watchTerminal(session: TerminalSession): void {
     unsubscribeMessage,
     unsubscribeExit,
     unsubscribeTitle,
+    unsubscribeAgentSession,
     unsubscribeCommandFinished,
     unsubscribeActivity,
   ]);

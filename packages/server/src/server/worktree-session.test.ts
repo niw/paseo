@@ -234,6 +234,8 @@ function createTerminalManagerStub(options?: {
             getSize: () => ({ rows: 1, cols: 1 }),
             getTitle: () => undefined,
             getActivity: () => null,
+            getAgentSession: () => null,
+            onAgentSessionChange: () => () => {},
             setActivity: () => {},
             getExitInfo: () => null,
           } satisfies TerminalSession;

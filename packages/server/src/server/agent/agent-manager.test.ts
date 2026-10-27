@@ -9495,6 +9495,71 @@ test("permission request notifies once without forcing unread attention state", 
   expect(attentionReasons).toContain("permission");
 });
 
+test("a provider's attention request notifies with its message", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-attention-provider-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+
+  class AttentionSession extends TestAgentSession {
+    override async startTurn(): Promise<{ turnId: string }> {
+      const turnId = "turn-attention-1";
+      setTimeout(() => {
+        this.pushEvent({ type: "turn_started", provider: this.provider, turnId });
+        this.pushEvent({
+          type: "attention_required",
+          provider: this.provider,
+          reason: "permission",
+          timestamp: "2026-10-27T00:00:00.000Z",
+          message: "Waiting in the terminal",
+        });
+        this.pushEvent({ type: "turn_completed", provider: this.provider, turnId });
+      }, 0);
+      return { turnId };
+    }
+  }
+
+  class AttentionClient implements AgentClient {
+    readonly provider = "codex" as const;
+    readonly capabilities = TEST_CAPABILITIES;
+
+    async isAvailable(): Promise<boolean> {
+      return true;
+    }
+
+    async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+      return new AttentionSession(config);
+    }
+
+    async resumeSession(config?: Partial<AgentSessionConfig>): Promise<AgentSession> {
+      return new AttentionSession({ provider: "codex", cwd: config?.cwd ?? process.cwd() });
+    }
+  }
+
+  const attentionCalls: Array<{ reason: string; message?: string }> = [];
+  const manager = new AgentManager({
+    clients: { codex: new AttentionClient() },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000133",
+    onAgentAttention: ({ reason, message }) => {
+      attentionCalls.push({ reason, ...(message ? { message } : {}) });
+    },
+  });
+  const dispatchedTypes: string[] = [];
+  manager.subscribe((event) => {
+    if (event.type === "agent_stream") dispatchedTypes.push(event.event.type);
+  });
+
+  const agent = await manager.createAgent(
+    { provider: "codex", cwd: workdir, title: "Provider attention test" },
+    undefined,
+    { workspaceId: undefined },
+  );
+  await manager.runAgent(agent.id, "hello");
+
+  expect(attentionCalls[0]).toEqual({ reason: "permission", message: "Waiting in the terminal" });
+  expect(dispatchedTypes).not.toContain("attention_required");
+});
+
 test("respondToPermission updates currentModeId after plan approval", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
   const storagePath = join(workdir, "agents");

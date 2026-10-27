@@ -955,6 +955,56 @@ test("client heartbeat clears attention for the focused terminal", async () => {
   });
 });
 
+test("client heartbeat clears attention for the focused agent's terminal", async () => {
+  const clearedTerminalIds: string[] = [];
+  const terminalsByCwd = new Map([
+    [
+      REPO_CWD,
+      [
+        { id: "terminal-agent", agentId: "agent-1" },
+        { id: "terminal-other-agent", agentId: "agent-2" },
+        { id: "terminal-plain" },
+      ],
+    ],
+  ]);
+  const session = createSessionForWorkspaceTests({
+    agentManager: {
+      getAgent: (agentId: string) =>
+        agentId === "agent-1"
+          ? makeManagedAgent({
+              id: agentId,
+              cwd: REPO_CWD,
+              lifecycle: "idle",
+              updatedAt: "2026-06-13T12:00:00.000Z",
+            })
+          : null,
+    },
+    terminalManager: asTerminalManager({
+      subscribeTerminalsChanged: () => () => {},
+      getTerminals: async (cwd: string) => terminalsByCwd.get(cwd) ?? [],
+      clearTerminalAttention: async (terminalId: string) => {
+        clearedTerminalIds.push(terminalId);
+        return true;
+      },
+    }),
+  });
+
+  await session.handleMessage(
+    {
+      type: "client_heartbeat",
+      deviceType: "web",
+      focusedAgentId: "agent-1",
+      focusedTerminalId: null,
+      lastActivityAt: "2026-06-13T12:00:00.000Z",
+      appVisible: true,
+    },
+    {},
+  );
+  await vi.waitFor(() => {
+    expect(clearedTerminalIds).toEqual(["terminal-agent"]);
+  });
+});
+
 test("create_agent_request keeps requested child cwd when grouped under an existing parent workspace", async () => {
   const workdir = mkdtempSync(path.join(tmpdir(), "paseo-create-agent-cwd-"));
   try {
