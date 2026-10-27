@@ -822,3 +822,28 @@ describe("removeWorkspace", () => {
     expect(after.workspaces).toBe(before.workspaces);
   });
 });
+
+describe("updateSessionServerInfo", () => {
+  it("keeps the commit the daemon was built from", () => {
+    const store = useSessionStore.getState();
+    initializeTestSession();
+
+    store.updateSessionServerInfo("test-server", {
+      serverId: "daemon-1",
+      hostname: "host",
+      version: "0.13.0",
+      commit: "0cc3805",
+    });
+    expect(useSessionStore.getState().sessions["test-server"]?.serverInfo?.commit).toBe("0cc3805");
+
+    store.updateSessionServerInfo("test-server", {
+      serverId: "daemon-1",
+      hostname: "host",
+      version: "0.13.0",
+      commit: "1dd4916-dirty",
+    });
+    expect(useSessionStore.getState().sessions["test-server"]?.serverInfo?.commit).toBe(
+      "1dd4916-dirty",
+    );
+  });
+});
