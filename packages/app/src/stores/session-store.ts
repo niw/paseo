@@ -295,6 +295,7 @@ export interface DaemonServerInfo {
   hostname: string | null;
   version: string | null;
   machineKind?: string | null;
+  commit?: string;
   desktopManaged?: boolean;
   capabilities?: ServerCapabilities;
   features?: ServerInfoStatusPayload["features"];
@@ -306,6 +307,7 @@ export function toDaemonServerInfo(serverInfo: ServerInfoStatusPayload): DaemonS
     hostname: serverInfo.hostname ?? null,
     version: serverInfo.version ?? null,
     ...(serverInfo.machineKind !== undefined ? { machineKind: serverInfo.machineKind } : {}),
+    ...(serverInfo.commit ? { commit: serverInfo.commit } : {}),
     ...(serverInfo.desktopManaged !== undefined
       ? { desktopManaged: serverInfo.desktopManaged }
       : {}),
@@ -787,11 +789,16 @@ function areServerInfoFeaturesEqual(
   return JSON.stringify(current ?? null) === JSON.stringify(next ?? null);
 }
 
+function trimmedOrNull(value: string | null | undefined): string | null {
+  return value?.trim() || null;
+}
+
 function isSessionServerInfoUnchanged(input: {
   currentServerInfo: SessionState["serverInfo"] | undefined;
   nextHostname: string | null;
   nextVersion: string | null;
   nextMachineKind: string | null;
+  nextCommit: string | undefined;
   nextDesktopManaged: boolean | undefined;
   nextCapabilities: ServerCapabilities | undefined;
   nextFeatures: ServerInfoStatusPayload["features"] | undefined;
@@ -802,18 +809,20 @@ function isSessionServerInfoUnchanged(input: {
     nextHostname,
     nextVersion,
     nextMachineKind,
+    nextCommit,
     nextDesktopManaged,
     nextCapabilities,
     nextFeatures,
   } = input;
-  const prevHostname = currentServerInfo?.hostname?.trim() || null;
-  const prevVersion = currentServerInfo?.version?.trim() || null;
-  const prevMachineKind = currentServerInfo?.machineKind?.trim() || null;
+  const prevHostname = trimmedOrNull(currentServerInfo?.hostname);
+  const prevVersion = trimmedOrNull(currentServerInfo?.version);
+  const prevMachineKind = trimmedOrNull(currentServerInfo?.machineKind);
   return (
     currentServerInfo?.serverId === input.nextServerId &&
     prevHostname === nextHostname &&
     prevVersion === nextVersion &&
     prevMachineKind === nextMachineKind &&
+    currentServerInfo?.commit === nextCommit &&
     currentServerInfo?.desktopManaged === nextDesktopManaged &&
     areServerCapabilitiesEqual(currentServerInfo?.capabilities, nextCapabilities) &&
     areServerInfoFeaturesEqual(currentServerInfo?.features, nextFeatures)
@@ -953,6 +962,7 @@ export const useSessionStore = create<SessionStore>()(
           const nextHostname = info.hostname?.trim() || null;
           const nextVersion = info.version?.trim() || null;
           const nextMachineKind = info.machineKind?.trim() || null;
+          const nextCommit = info.commit;
           const nextDesktopManaged = info.desktopManaged;
           const nextCapabilities = info.capabilities;
           const nextFeatures = info.features;
@@ -963,6 +973,7 @@ export const useSessionStore = create<SessionStore>()(
               nextHostname,
               nextVersion,
               nextMachineKind,
+              nextCommit,
               nextDesktopManaged,
               nextCapabilities,
               nextFeatures,
@@ -983,6 +994,7 @@ export const useSessionStore = create<SessionStore>()(
                   hostname: nextHostname,
                   version: nextVersion,
                   ...(nextMachineKind !== null ? { machineKind: nextMachineKind } : {}),
+                  ...(nextCommit ? { commit: nextCommit } : {}),
                   ...(nextDesktopManaged !== undefined
                     ? { desktopManaged: nextDesktopManaged }
                     : {}),

@@ -4043,6 +4043,8 @@ export const ServerInfoStatusPayloadSchema = z
     // Best-effort machine kind detected by the daemon (e.g. "laptop", "mini", "cloud").
     // Loose string so unknown future kinds stay parseable across versions.
     machineKind: z.string().nullable().optional(),
+    // The commit the daemon was built from, such as `0cc3805-dirty`. Display only.
+    commit: z.string().optional(),
     // Authenticated producer for host registration ownership, separate from admission authority.
     sourceId: z.string().optional(),
     // COMPAT(sessionPermissions): optional while clients support older daemons.

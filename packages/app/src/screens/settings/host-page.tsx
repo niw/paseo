@@ -55,7 +55,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
 import type { HostConnection, HostProfile } from "@/types/host-connection";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { isVersionMismatch } from "@/desktop/updates/desktop-updates";
+import { formatVersionWithCommit, isVersionMismatch } from "@/desktop/updates/desktop-updates";
 import { resolveAppVersion } from "@/utils/app-version";
 import { formatConnectionStatus, getConnectionStatusTone } from "@/utils/daemons";
 import { ICON_SIZE } from "@/styles/theme";
@@ -135,10 +135,9 @@ function formatActiveConnectionBadge(
   };
 }
 
-function formatDaemonVersionBadge(version: string | null): string | null {
-  const trimmed = version?.trim();
-  if (!trimmed) return null;
-  return trimmed.startsWith("v") ? trimmed : `v${trimmed}`;
+function formatDaemonVersionBadge(version: string | null, commit: string | null): string | null {
+  if (!version?.trim()) return null;
+  return formatVersionWithCommit(version, commit);
 }
 
 function useHostProfile(serverId: string): HostProfile | null {
@@ -164,6 +163,9 @@ function HostStatusBadges({ serverId }: { serverId: string }) {
   const daemonVersion = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.version ?? null,
   );
+  const daemonCommit = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.commit ?? null,
+  );
 
   const connectionStatus = snapshot?.connectionStatus ?? "connecting";
   const activeConnection = snapshot?.activeConnection ?? null;
@@ -182,7 +184,7 @@ function HostStatusBadges({ serverId }: { serverId: string }) {
     statusDotColor = theme.colors.statusDotDanger;
   }
   const connectionBadge = formatActiveConnectionBadge(activeConnection, theme, t);
-  const versionBadgeText = formatDaemonVersionBadge(daemonVersion);
+  const versionBadgeText = formatDaemonVersionBadge(daemonVersion, daemonCommit);
   const statusDotStyle = useMemo(
     () => [styles.statusDot, { backgroundColor: statusDotColor }],
     [statusDotColor],
