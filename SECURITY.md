@@ -58,6 +58,8 @@ When Paseo checks out a change request from a different repository, it does not 
 
 If you expose the daemon beyond loopback, such as by binding to `0.0.0.0`, forwarding it through a tunnel or reverse proxy, or publishing it from a Docker container, you are responsible for restricting and securing that access. Setting a password is strongly recommended in that case.
 
+To give agents on other machines the Paseo tools, run the [MCP gateway](public-docs/mcp.md#mcp-gateway) and tunnel only its listener. Do not tunnel the daemon port: cloudflared reaches it over loopback, so a tunneled request looks like a local agent. The gateway accepts nothing but a verified Cloudflare Access JWT, and reaches each daemon as an ordinary client with the authority of its saved connection.
+
 In Docker, the official image runs the daemon and agents as the non-root
 `paseo` user by default. Mounted workspaces and credentials are still fully
 available to anything the agents run inside the container.
