@@ -446,10 +446,20 @@ function handleDesktopKeyPressImpl(
     shiftKey: shiftKey ?? false,
     metaKey: metaKey ?? false,
     ctrlKey: ctrlKey ?? false,
+    altKey: altKey ?? false,
     isAgentRunning: ctx.isAgentRunning,
     onQueue: ctx.onQueue,
   });
   if (action === null) return;
+  if (action === "newline") {
+    // A textarea inserts a line only for plain and Shift+Enter. insertText keeps undo and fires
+    // the input event that updates the composer value.
+    if (isWeb) {
+      event.preventDefault();
+      document.execCommand("insertText", false, "\n");
+    }
+    return;
+  }
 
   if (ctx.isSubmitDisabled || ctx.isSubmitLoading || ctx.disabled) return;
   event.preventDefault();
