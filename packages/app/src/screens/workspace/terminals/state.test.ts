@@ -67,6 +67,15 @@ describe("workspace terminal state", () => {
         scriptTerminalIds: new Set(["terminal-1", "script-live"]),
       }),
     ).toEqual(["terminal-2"]);
+    expect(
+      collectStandaloneTerminalIds({
+        terminals: [
+          listedTerminal("terminal-1"),
+          { ...listedTerminal("claude"), agentId: "agent-1" },
+        ],
+        scriptTerminalIds: new Set(),
+      }),
+    ).toEqual(["terminal-1"]);
   });
 
   it("updates terminal cache entries for created and closed terminals", () => {

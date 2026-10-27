@@ -998,6 +998,7 @@ export async function createPaseoDaemon(
       providerOverrides: config.providerOverrides,
       workspaceGitService,
       managedProcesses,
+      terminalManager,
       isDev: config.isDev === true,
       extraClients: config.agentClients,
       backgroundRefresh: { intervalMs: PROVIDER_BACKGROUND_REFRESH_INTERVAL_MS },

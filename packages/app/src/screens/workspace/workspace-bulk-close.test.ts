@@ -54,6 +54,19 @@ describe("workspace bulk close helpers", () => {
     });
   });
 
+  it("closes an agent's terminal tab without killing the terminal", () => {
+    const groups = classifyBulkClosableTabs(
+      [makeTerminalTab("plain"), makeTerminalTab("claude")],
+      () => "archive",
+      (terminalId) => terminalId === "claude",
+    );
+
+    expect(groups).toMatchObject({
+      terminalTabs: [{ tabId: "terminal_plain", terminalId: "plain" }],
+      otherTabs: [{ tabId: "terminal_claude", target: { kind: "terminal", terminalId: "claude" } }],
+    });
+  });
+
   it("separates subagent tabs from agents that archive on close", () => {
     const groups = classifyBulkClosableTabs(
       [makeAgentTab("root"), makeAgentTab("child")],
