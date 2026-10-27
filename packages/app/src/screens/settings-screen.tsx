@@ -91,8 +91,11 @@ import { BrowserDataSection } from "@/desktop/browser/settings/browser-data-sect
 import { IntegrationsSection } from "@/desktop/components/integrations-section";
 import { isElectronRuntime } from "@/desktop/host";
 import { useDesktopAppUpdater } from "@/desktop/updates/use-desktop-app-updater";
-import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
-import { resolveAppVersion } from "@/utils/app-version";
+import {
+  formatVersionWithCommit,
+  formatVersionWithPrefix,
+} from "@/desktop/updates/desktop-updates";
+import { resolveAppCommit, resolveAppVersion } from "@/utils/app-version";
 import { openChangelog } from "@/changelog";
 import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { settingsStyles } from "@/styles/settings";
@@ -547,6 +550,9 @@ function HostVersionRow({
   const daemonVersion = useSessionStore(
     (state) => state.sessions[host.serverId]?.serverInfo?.version ?? null,
   );
+  const daemonCommit = useSessionStore(
+    (state) => state.sessions[host.serverId]?.serverInfo?.commit ?? null,
+  );
 
   const rowStyle = useMemo(
     () => [settingsStyles.row, showBorder && settingsStyles.rowBorder],
@@ -562,7 +568,7 @@ function HostVersionRow({
   if (!isConnected) {
     valueText = t("settings.about.offline");
   } else if (normalizedHost) {
-    valueText = formatVersionWithPrefix(normalizedHost);
+    valueText = formatVersionWithCommit(normalizedHost, daemonCommit);
   } else {
     valueText = "—";
   }
@@ -1106,7 +1112,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const lastOpenedAddHostIntentRef = useRef<string | null>(null);
   const isDesktopApp = isElectronRuntime();
   const appVersion = resolveAppVersion();
-  const appVersionText = formatVersionWithPrefix(appVersion);
+  const appVersionText = formatVersionWithCommit(appVersion, resolveAppCommit());
   const isCompactLayout = useIsCompactFormFactor();
   const insets = useSafeAreaInsets();
   const insetBottomStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
