@@ -8,6 +8,7 @@ import type {
 import type { TerminalState } from "@getpaseo/protocol/messages";
 import type { TerminalActivity, TerminalActivityState } from "@getpaseo/protocol/terminal-activity";
 import type { CaptureTerminalLinesResult } from "./terminal-capture.js";
+import type { TerminalAgentSession } from "@getpaseo/protocol/messages";
 
 export interface WorkerTerminalInfo {
   id: string;
@@ -16,12 +17,15 @@ export interface WorkerTerminalInfo {
   workspaceId?: string;
   title?: string;
   activity: TerminalActivity | null;
+  agentSession?: TerminalAgentSession;
+  agentId?: string;
 }
 
 export interface WorkerCreateTerminalOptions {
   id?: string;
   cwd: string;
   workspaceId?: string;
+  agentId?: string;
   name?: string;
   title?: string;
   env?: Record<string, string>;
@@ -134,6 +138,11 @@ export type TerminalWorkerEvent =
       title?: string;
     }
   | {
+      type: "terminalAgentSessionChange";
+      terminalId: string;
+      agentSession: TerminalAgentSession | null;
+    }
+  | {
       type: "terminalCommandFinished";
       terminalId: string;
       info: {
@@ -145,6 +154,7 @@ export type TerminalWorkerEvent =
       terminalId: string;
       activity: TerminalActivity | null;
       previous: TerminalActivity | null;
+      statusMessage?: string;
     };
 
 export type TerminalWorkerToParentMessage = TerminalWorkerResponse | TerminalWorkerEvent;

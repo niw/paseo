@@ -266,6 +266,7 @@ function transition(input: {
   changedAt: number;
   id?: string;
   workspaceId?: string;
+  statusMessage?: string;
 }): TerminalActivityTransitionEvent {
   return {
     terminalId: input.id ?? "term-1",
@@ -274,6 +275,7 @@ function transition(input: {
     workspaceId: input.workspaceId ?? "ws-1",
     activity: input.state ? { state: input.state, changedAt: input.changedAt } : null,
     previous: { state: input.previousState, changedAt: input.previousChangedAt },
+    ...(input.statusMessage ? { statusMessage: input.statusMessage } : {}),
   };
 }
 
@@ -452,6 +454,28 @@ describe("VoiceAssistantWebSocketServer terminal attention notifications", () =>
     expect(payload.reason).toBe("needs_input");
     expect(payload.title).toBe("Terminal needs input");
     expect(payload.body).toBe("bash");
+  });
+
+  it("includes the program status message in the notification body", async () => {
+    const { manager, emit } = createTerminalManager();
+    const { server } = createServer(manager);
+    const ws = connectClient(server);
+
+    emit(
+      transition({
+        previousState: "working",
+        previousChangedAt: 1000,
+        state: "attention",
+        changedAt: 15000,
+        statusMessage: "approve Bash: npm test",
+      }),
+    );
+
+    await flushAsync();
+
+    const payload = readTerminalAttentionMessage(ws);
+    expect(payload.title).toBe("Terminal needs input");
+    expect(payload.body).toBe("bash: approve Bash: npm test");
   });
 
   it("broadcasts needs_input after idle -> attention", async () => {

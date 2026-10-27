@@ -165,6 +165,28 @@ const SourceSchema = z.object({
     ).toBe(true);
   });
 
+  it("accepts terminals with and without an agent session", () => {
+    const terminal = { id: "term-1", name: "zsh", workspaceId: "ws-1", activity: null };
+    const envelope = (terminals: unknown[]) => ({
+      type: "session",
+      message: { type: "terminals_changed", payload: { cwd: "/repo", terminals } },
+    });
+
+    expect(validateWSOutboundMessage(envelope([terminal])).success).toBe(true);
+    expect(
+      validateWSOutboundMessage(
+        envelope([
+          { ...terminal, agentSession: { provider: "claude", sessionId: "session-1" } },
+          { ...terminal, id: "term-2", agentSession: { provider: "future", sessionId: "s" } },
+        ]),
+      ).success,
+    ).toBe(true);
+    expect(
+      validateWSOutboundMessage(envelope([{ ...terminal, agentSession: { provider: "claude" } }]))
+        .success,
+    ).toBe(false);
+  });
+
   it("accepts a compact provider snapshot envelope", () => {
     const envelope = {
       type: "session",

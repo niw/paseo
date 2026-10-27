@@ -283,7 +283,7 @@ class ClaudeQuestionAnswerRequiredError extends Error {
   }
 }
 
-function assertClaudeQuestionAnswerDeliverable(
+export function assertClaudeQuestionAnswerDeliverable(
   request: AgentPermissionRequest,
   response: AgentPermissionResponse,
 ): void {
@@ -376,7 +376,7 @@ const CLAUDE_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindBoth: true,
 };
 
-const DEFAULT_MODES: AgentMode[] = [
+export const DEFAULT_MODES: AgentMode[] = [
   {
     id: "plan",
     label: "Plan Mode",
@@ -427,7 +427,7 @@ const CLAUDE_ROOT_ONLY_COMMANDS = new Set([
 const INTERRUPT_TOOL_USE_PLACEHOLDER = "[Request interrupted by user for tool use]";
 const INTERRUPT_PLACEHOLDER_PATTERN = /^\[Request interrupted by user(?:[^\]]*)\]$/;
 const NO_RESPONSE_REQUESTED_PLACEHOLDER = "No response requested.";
-const STEER_SUPERSEDED_PERMISSION_MESSAGE =
+export const STEER_SUPERSEDED_PERMISSION_MESSAGE =
   "The user answered with a message instead of approving. Their message follows.";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -437,7 +437,7 @@ interface SlashCommandInvocation {
   rawInput: string;
 }
 
-function classifyClaudeSlashCommand(commandName: string): AgentSlashCommand["kind"] {
+export function classifyClaudeSlashCommand(commandName: string): AgentSlashCommand["kind"] {
   // Claude exposes commands and skills as one flat SDK list, without structured source
   // metadata. Keep obvious root-only/session controls out of inline autocomplete and
   // treat the rest as skills; the worst failure mode is an inert inline suggestion.
@@ -532,7 +532,9 @@ function extractSessionIdRaw(msg: {
   return "";
 }
 
-function isClaudeThinkingEffort(value: string | null | undefined): value is ClaudeThinkingEffort {
+export function isClaudeThinkingEffort(
+  value: string | null | undefined,
+): value is ClaudeThinkingEffort {
   return (
     value === "low" ||
     value === "medium" ||
@@ -542,7 +544,9 @@ function isClaudeThinkingEffort(value: string | null | undefined): value is Clau
   );
 }
 
-function isClaudeThinkingOption(value: string | null | undefined): value is ClaudeThinkingOption {
+export function isClaudeThinkingOption(
+  value: string | null | undefined,
+): value is ClaudeThinkingOption {
   return (
     value === CLAUDE_DISABLED_THINKING_OPTION_ID ||
     value === CLAUDE_ULTRACODE_THINKING_OPTION_ID ||
@@ -550,7 +554,7 @@ function isClaudeThinkingOption(value: string | null | undefined): value is Clau
   );
 }
 
-function assertClaudeThinkingOptionSupported(
+export function assertClaudeThinkingOptionSupported(
   modelId: string | null | undefined,
   thinkingOptionId: string | null | undefined,
 ): void {
@@ -1094,7 +1098,7 @@ function isClaudeContentChunk(value: unknown): value is ClaudeContentChunk {
   return isMetadata(value) && typeof value.type === "string";
 }
 
-function isPermissionUpdate(value: AgentPermissionUpdate): value is PermissionUpdate {
+export function isPermissionUpdate(value: AgentPermissionUpdate): value is PermissionUpdate {
   if (!isMetadata(value)) {
     return false;
   }
@@ -1108,7 +1112,7 @@ function isPermissionUpdate(value: AgentPermissionUpdate): value is PermissionUp
   return Array.isArray(rules) && typeof behavior === "string" && typeof destination === "string";
 }
 
-function resolvePermissionKind(
+export function resolvePermissionKind(
   toolName: string,
   input: Record<string, unknown>,
 ): AgentPermissionRequestKind {
@@ -1124,7 +1128,7 @@ function resolvePermissionKind(
 // whole question object, so the notification reads as JSON. Summarize the first
 // question the same way the OMP and Pi providers do for their ask_user
 // permissions.
-function buildClaudeQuestionPermissionSummary(
+export function buildClaudeQuestionPermissionSummary(
   toolName: string,
   input: AgentMetadata,
 ): { title?: string; description?: string } {
@@ -1154,7 +1158,7 @@ function getClaudeModeLabel(modeId: PermissionMode): string {
   return DEFAULT_MODES.find((mode) => mode.id === modeId)?.label ?? modeId;
 }
 
-function buildClaudePlanPermissionActions(
+export function buildClaudePlanPermissionActions(
   resumeMode: PermissionMode | null,
 ): AgentPermissionAction[] {
   const actions: AgentPermissionAction[] = [
@@ -1645,6 +1649,24 @@ export class ClaudeAgentClient implements AgentClient {
       resolveBinary: this.resolveBinary,
       rewindSdk: this.rewindSdk,
     });
+  }
+
+  /** Converts a session's whole transcript into history events without starting the SDK. */
+  async loadSessionHistory(
+    handle: AgentPersistenceHandle,
+    overrides?: Partial<AgentSessionConfig>,
+    launchContext?: AgentLaunchContext,
+  ): Promise<AgentStreamEvent[]> {
+    const session = await this.resumeSession(handle, overrides, launchContext);
+    const events: AgentStreamEvent[] = [];
+    try {
+      for await (const event of session.streamHistory()) {
+        events.push(event);
+      }
+    } finally {
+      await session.close();
+    }
+    return events;
   }
 
   async getCatalogCacheKey(_options: FetchCatalogOptions): Promise<string> {

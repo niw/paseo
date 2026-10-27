@@ -6,7 +6,10 @@ Paseo surfaces terminal activity as a tab indicator (the same "running" dot used
 
 Terminal activity is source-agnostic plumbing. `TerminalActivityTracker` holds the current per-terminal state and emits transitions to the manager, worker protocol, websocket subscription, app buckets, dots, and notifications.
 
-The tracker defaults to unknown (`null`). Activity production lives outside terminal stream parsing: agent hook commands report coarse activity to the daemon's local `/api/terminal-activity` endpoint.
+The tracker defaults to unknown (`null`). Two producers feed it:
+
+- Programs that speak the OSC 7501 Program Status Protocol report status in the terminal output stream. See [Program status reporting](#program-status-reporting).
+- Agent hook commands report coarse activity to the daemon's local `/api/terminal-activity` endpoint. See [Hook reporting](#hook-reporting).
 
 ## Architecture
 
@@ -35,6 +38,30 @@ The daemon consumes these transitions, not snapshots. When a transition moves fr
 Terminal list visibility is `workspaceId`-scoped: a terminal belongs to the workspace that created it, and same-`cwd` sibling workspaces do not see it in their terminal lists. Terminal status routing starts from that owning workspace, uses the owning workspace's `cwd`, then fans the status bucket out to every active workspace with the same `cwd`.
 
 Path-prefix routing is only a legacy fallback for unowned terminal activity contribution. If a live terminal has no `workspaceId`, the daemon resolves the deepest active parent workspace from the terminal `cwd`, then fans status out to active same-`cwd` siblings of that owner. That fallback contributes status, but it does not make the terminal visible in workspace-scoped terminal lists.
+
+## Program status reporting
+
+The terminal worker's headless xterm parses [OSC 7501](https://www.superlogical.com/rex/docs/build/program-status) (`packages/server/src/terminal/activity/program-status.ts`). It needs no agent config: the program reports through the pty, so it also works over SSH and inside containers.
+
+Claude Code sends `OSC 7501 ; ?` at startup and reports status only when the terminal replies. The daemon answers that query itself, as it does for DA1 and the color queries.
+
+Each terminal holds the spec's per-id records and derives one activity from them: any `blocked` record is `needs_input`, then any `working` record is `working`, then any `done` or `error` record is finished attention, then `idle`. The tracker applies that derived activity only when it changes, so a hook-only terminal never sees it.
+
+The `msg` of the latest record that decides the activity rides on the transition as `statusMessage`, and the terminal attention notification appends it to the body (`bash: approve Bash: npm test`). It stays inside the daemon. The app receives it only as notification text, so no protocol field carries it.
+
+Program status differs from hooks in one place. A program reports unseen results as `done`, so `idle` after `working` is plain idle with no finished attention. Claude Code reports `idle` when the user interrupts a turn, so an interrupt key leaves program status activity alone: Claude Code keeps working after Escape when it runs a prompt queued during the turn, and it sends no new report while its state stays the same.
+
+Working and blocked records end at the next shell prompt, which is the shell integration's OSC 633 `A`. Do not use OSC 133 `A` for this: Claude Code emits it inside its own UI to mark turns. RIS removes every record.
+
+### Agent session
+
+A program status report from `app=claude-code`, or a shell prompt, makes the terminal look up the Claude Code session running in it (`packages/server/src/terminal/agent-session/claude.ts`). Claude Code writes `<config dir>/sessions/<pid>.json` for every running process and rewrites it after `/clear` or `/resume`. The terminal matches those files against the pty process and its descendants and reports the result as the optional `agentSession` on terminal info. The app uses it for the terminal tab's "Copy resume command".
+
+- The session file is internal to Claude Code. Anything unexpected reads as no session, never as an error.
+- The outermost Claude process wins, so a Claude that a tool starts inside another Claude does not replace the one the user is talking to.
+- Claude Code can report status before it writes its session file, so a miss while it reports retries a few times.
+- A Claude Code that inherits another session's variables, such as `CLAUDE_CODE_CHILD_SESSION`, acts as a child session and writes no session file. Terminals drop `CLAUDE_PARENT_SESSION_ENV_KEYS` (`packages/server/src/server/agent/providers/claude/parent-session-env.ts`) from the daemon environment, which matters when the daemon starts from inside Claude Code.
+- Terminals whose programs never report as `claude-code` never run `ps`. Windows is not supported yet.
 
 ## Hook reporting
 

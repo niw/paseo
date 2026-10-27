@@ -65,6 +65,66 @@ describe("TerminalActivityTracker — clearAttention", () => {
   });
 });
 
+describe("TerminalActivityTracker — applyProgramActivity", () => {
+  it("does not mark idle after working as finished", () => {
+    const tracker = new TerminalActivityTracker();
+
+    tracker.applyProgramActivity("working");
+    tracker.applyProgramActivity("idle");
+
+    expect(tracker.getSnapshot()).toMatchObject({ state: "idle", attentionReason: null });
+  });
+
+  it("marks done results as finished attention", () => {
+    const tracker = new TerminalActivityTracker();
+
+    tracker.applyProgramActivity("finished");
+
+    expect(tracker.getSnapshot()).toMatchObject({ state: "idle", attentionReason: "finished" });
+  });
+
+  it("marks blocked programs as needing input", () => {
+    const tracker = new TerminalActivityTracker();
+
+    tracker.applyProgramActivity("needs_input");
+
+    expect(tracker.getSnapshot()).toMatchObject({
+      state: "idle",
+      attentionReason: "needs_input",
+    });
+  });
+
+  it("keeps unseen finished attention when the program goes idle or clears", () => {
+    const tracker = new TerminalActivityTracker();
+
+    tracker.applyProgramActivity("finished");
+    tracker.applyProgramActivity("idle");
+    tracker.applyProgramActivity(null);
+
+    expect(tracker.getSnapshot()).toMatchObject({ state: "idle", attentionReason: "finished" });
+  });
+
+  it("returns to unknown when a working program clears its records", () => {
+    const tracker = new TerminalActivityTracker();
+
+    tracker.applyProgramActivity("working");
+    tracker.applyProgramActivity(null);
+
+    expect(tracker.getSnapshot()).toMatchObject({ state: null, attentionReason: null });
+  });
+
+  it("passes the status message to listeners", () => {
+    const tracker = new TerminalActivityTracker();
+    const statusMessages: Array<string | undefined> = [];
+    tracker.onChange((_snapshot, _previous, statusMessage) => statusMessages.push(statusMessage));
+
+    tracker.applyProgramActivity("needs_input", "approve Bash: ls");
+    tracker.set("working");
+
+    expect(statusMessages).toEqual(["approve Bash: ls", undefined]);
+  });
+});
+
 describe("TerminalActivityTracker — onChange listener", () => {
   it("fires when state changes", () => {
     const tracker = new TerminalActivityTracker();

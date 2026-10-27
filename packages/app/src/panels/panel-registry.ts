@@ -6,6 +6,7 @@ import { getPanelManifest, type PanelManifest } from "@/panels/panel-manifest";
 export type { PaneHost } from "@/panels/panel-manifest";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
+import type { TerminalAgentSession } from "@getpaseo/protocol/messages";
 
 export interface PanelIconProps {
   size: number;
@@ -20,6 +21,10 @@ export interface PanelDescriptor {
   titleState: "ready" | "loading";
   icon: ComponentType<PanelIconProps>;
   statusBucket: SidebarStateBucket | null;
+  /** The agent session running behind this panel, such as Claude Code in a terminal. */
+  agentSession?: TerminalAgentSession;
+  /** The terminal an agent's provider runs in, such as a Claude (Terminal) agent's. */
+  agentTerminalId?: string;
 }
 
 export interface PanelDescriptorContext {

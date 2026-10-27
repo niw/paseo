@@ -915,6 +915,7 @@ export async function createPaseoDaemon(
       providerOverrides: config.providerOverrides,
       workspaceGitService,
       managedProcesses,
+      terminalManager,
       isDev: config.isDev === true,
       extraClients: config.agentClients,
     },

@@ -210,6 +210,10 @@ function terminalAttentionTitle(reason: TerminalAttentionReason): string {
   return reason === "needs_input" ? "Terminal needs input" : "Terminal finished";
 }
 
+function terminalAttentionBody(input: { terminalName: string; statusMessage?: string }): string {
+  return input.statusMessage ? `${input.terminalName}: ${input.statusMessage}` : input.terminalName;
+}
+
 function createFallbackWorkspaceGitSnapshot(cwd: string): WorkspaceGitRuntimeSnapshot {
   return {
     cwd,
@@ -847,6 +851,7 @@ export class VoiceAssistantWebSocketServer {
           cwd: event.cwd,
           ...(event.workspaceId ? { workspaceId: event.workspaceId } : {}),
           terminalName: event.name,
+          ...(event.statusMessage ? { statusMessage: event.statusMessage } : {}),
           reason,
         }).catch((err) => {
           this.logger.warn(
@@ -2883,6 +2888,7 @@ export class VoiceAssistantWebSocketServer {
     cwd: string;
     workspaceId?: string;
     terminalName: string;
+    statusMessage?: string;
     reason: TerminalAttentionReason;
   }): Promise<void> {
     const clientEntries: Array<{
@@ -2925,7 +2931,7 @@ export class VoiceAssistantWebSocketServer {
     });
 
     const title = terminalAttentionTitle(params.reason);
-    const body = params.terminalName;
+    const body = terminalAttentionBody(params);
 
     if (plan.shouldPush) {
       void this.pushNotificationSender

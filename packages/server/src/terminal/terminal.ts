@@ -21,9 +21,26 @@ import {
   findExecutable,
   findExecutableWithoutProbing,
 } from "../executable-resolution/executable-resolution.js";
-import type { TerminalCell, TerminalState } from "@getpaseo/protocol/messages";
+import type {
+  TerminalAgentSession,
+  TerminalCell,
+  TerminalState,
+} from "@getpaseo/protocol/messages";
 import { TerminalInputModeTracker } from "@getpaseo/protocol/terminal-input-mode";
 import { TerminalActivityTracker } from "./activity/terminal-activity-tracker.js";
+import {
+  PROGRAM_STATUS_OSC_CODE,
+  PROGRAM_STATUS_QUERY,
+  PROGRAM_STATUS_QUERY_REPLY,
+  ProgramStatusRecords,
+  parseProgramStatusReport,
+  type ProgramStatusActivity,
+} from "./activity/program-status.js";
+import { TerminalAgentSessionTracker } from "./agent-session/terminal-agent-session-tracker.js";
+import {
+  CLAUDE_CODE_PROGRAM_STATUS_APP,
+  findClaudeSessionInProcessTree,
+} from "./agent-session/claude.js";
 import type { TerminalActivity, TerminalActivityState } from "@getpaseo/protocol/terminal-activity";
 
 const { Terminal } = xterm;
@@ -97,6 +114,8 @@ export type ServerMessage =
 export interface TerminalActivityTransition {
   activity: TerminalActivity | null;
   previous: TerminalActivity | null;
+  /** Why the program changed activity, from its OSC 7501 report. */
+  statusMessage?: string;
 }
 
 export interface TerminalSession {
@@ -104,18 +123,22 @@ export interface TerminalSession {
   name: string;
   cwd: string;
   workspaceId: string;
+  /** The Paseo agent whose provider runs in this terminal. */
+  agentId?: string;
   send(msg: ClientMessage): void;
   subscribe(listener: (msg: ServerMessage) => void, options?: TerminalSubscribeOptions): () => void;
   onExit(listener: (info: TerminalExitInfo) => void): () => void;
   onCommandFinished(listener: (info: TerminalCommandFinishedInfo) => void): () => void;
   onTitleChange(listener: (title?: string) => void): () => void;
   onActivityChange(listener: (transition: TerminalActivityTransition) => void): () => void;
+  onAgentSessionChange(listener: (agentSession: TerminalAgentSession | null) => void): () => void;
   getSize(): { rows: number; cols: number };
   getState(): TerminalState;
   getStateSnapshot(options?: TerminalStateSnapshotOptions): TerminalStateSnapshot;
   getReplayPreamble(): string;
   getTitle(): string | undefined;
   getActivity(): TerminalActivity | null;
+  getAgentSession(): TerminalAgentSession | null;
   setActivity(state: TerminalActivityState): void;
   clearActivityAttention(): boolean;
   setTitle(title: string): void;
@@ -145,6 +168,7 @@ export interface CreateTerminalOptions {
   id?: string;
   cwd: string;
   workspaceId: string;
+  agentId?: string;
   shell?: string;
   env?: Record<string, string>;
   activityEnv?: Record<string, string>;
@@ -977,6 +1001,7 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
   const {
     cwd,
     workspaceId,
+    agentId,
     shell,
     env = {},
     activityEnv = {},
@@ -1015,6 +1040,8 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
   let stateRevision = 0;
   const inputModeTracker = new TerminalInputModeTracker();
   const activityTracker = new TerminalActivityTracker();
+  const programStatusRecords = new ProgramStatusRecords();
+  let programActivity: ProgramStatusActivity = null;
   const activityChangeListeners = new Set<(transition: TerminalActivityTransition) => void>();
   let titleChangeSubscription: { dispose(): void } | null = null;
 
@@ -1163,7 +1190,64 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     });
   }
 
+  // Terminals without program status reports keep hook-driven activity untouched.
+  function refreshProgramActivity(): void {
+    const nextActivity = programStatusRecords.deriveActivity();
+    if (nextActivity === programActivity) {
+      return;
+    }
+    programActivity = nextActivity;
+    activityTracker.applyProgramActivity(
+      nextActivity,
+      programStatusRecords.describeActivity(nextActivity),
+    );
+  }
+
+  const agentSessionTracker = new TerminalAgentSessionTracker({
+    isAgentReporting: () => programStatusRecords.hasApp(CLAUDE_CODE_PROGRAM_STATUS_APP),
+    findAgentSession: async () => {
+      const sessionId = await findClaudeSessionInProcessTree({
+        rootPid: ptyProcess.pid,
+        env: terminalEnv,
+      });
+      return sessionId ? { provider: "claude", sessionId } : null;
+    },
+  });
+
+  const disposeProgramStatusSubscription = terminal.parser.registerOscHandler(
+    PROGRAM_STATUS_OSC_CODE,
+    (data) => {
+      if (data === PROGRAM_STATUS_QUERY) {
+        ptyProcess.write(PROGRAM_STATUS_QUERY_REPLY);
+        return true;
+      }
+      const report = parseProgramStatusReport(data);
+      if (report) {
+        programStatusRecords.apply(report);
+        refreshProgramActivity();
+        agentSessionTracker.scheduleRefresh();
+      }
+      return true;
+    },
+  );
+
+  // RIS removes every program status record. Returning false keeps xterm's own reset.
+  const disposeFullResetSubscription = terminal.parser.registerEscHandler({ final: "c" }, () => {
+    programStatusRecords.clear();
+    refreshProgramActivity();
+    return false;
+  });
+
   const disposeCommandLifecycleSubscription = terminal.parser.registerOscHandler(633, (data) => {
+    // NOTE: A shell prompt ends working and blocked program status records. Only the
+    // shell integration's OSC 633 prompt counts, because Claude Code emits OSC 133 A
+    // inside its own UI to mark turns.
+    if (data === "A") {
+      programStatusRecords.dropTransient();
+      refreshProgramActivity();
+      agentSessionTracker.scheduleRefresh();
+      return true;
+    }
     const commandFinished = parseCommandFinishedOsc(data);
     if (!commandFinished) {
       return true;
@@ -1179,13 +1263,14 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     return true;
   });
 
-  activityTracker.onChange((snapshot, previousSnapshot) => {
+  activityTracker.onChange((snapshot, previousSnapshot, statusMessage) => {
     if (disposed || killed) {
       return;
     }
     const transition: TerminalActivityTransition = {
       activity: toTerminalActivity(snapshot),
       previous: toTerminalActivity(previousSnapshot),
+      ...(statusMessage ? { statusMessage } : {}),
     };
     for (const listener of Array.from(activityChangeListeners)) {
       try {
@@ -1247,6 +1332,10 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     clearPendingTitleChange();
     disposeTitleChangeSubscription();
     disposeCommandLifecycleSubscription.dispose();
+    disposeProgramStatusSubscription.dispose();
+    disposeFullResetSubscription.dispose();
+    programStatusRecords.clear();
+    agentSessionTracker.dispose();
     activityTracker.dispose();
     terminal.dispose();
     listeners.clear();
@@ -1403,7 +1492,8 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
 
     switch (msg.type) {
       case "input": {
-        if (isTerminalActivityInterruptInput(msg.data)) {
+        // A program reporting OSC 7501 status says itself when an interrupt stops it.
+        if (isTerminalActivityInterruptInput(msg.data) && programActivity === null) {
           activityTracker.interrupt();
         }
         pendingInput += msg.data;
@@ -1532,6 +1622,16 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     return toTerminalActivity(activityTracker.getSnapshot());
   }
 
+  function getAgentSession(): TerminalAgentSession | null {
+    return agentSessionTracker.get();
+  }
+
+  function onAgentSessionChange(
+    listener: (agentSession: TerminalAgentSession | null) => void,
+  ): () => void {
+    return agentSessionTracker.onChange(listener);
+  }
+
   function setActivity(state: TerminalActivityState): void {
     activityTracker.set(state);
   }
@@ -1633,18 +1733,21 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     name,
     cwd,
     workspaceId,
+    ...(agentId ? { agentId } : {}),
     send,
     subscribe,
     onExit,
     onCommandFinished,
     onTitleChange,
     onActivityChange,
+    onAgentSessionChange,
     getSize,
     getState,
     getStateSnapshot,
     getReplayPreamble,
     getTitle,
     getActivity,
+    getAgentSession,
     setActivity,
     clearActivityAttention,
     setTitle,

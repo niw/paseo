@@ -15,8 +15,11 @@ import { useFilePanelOpenWithMenu } from "@/file-panels";
 import { MobileTabTrailingAccessory } from "@/screens/workspace/workspace-tab-trailing-accessory";
 import {
   buildWorkspaceTabMenuEntries,
+  type WorkspaceTabMenuEntry,
   type WorkspaceTabMenuLabels,
 } from "@/screens/workspace/workspace-tab-menu";
+import { useOpenWorkspaceTerminalTab } from "@/screens/workspace/use-open-workspace-terminal-tab";
+import { useCopyResumeCommand } from "@/screens/workspace/use-copy-resume-command";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 
 // The trigger draws at 32pt beside its island neighbours, so only vertical slop is free.
@@ -143,6 +146,49 @@ interface MobileWorkspaceTabSwitcherProps {
   onCloseOtherTabs: (tabId: string) => Promise<void> | void;
 }
 
+// The terminal agent session comes from the tab presentation, so the row builds the menu.
+function MobileWorkspaceTabOptionRow({
+  presentation,
+  selected,
+  active,
+  onPress,
+  menuTestIDBase,
+  presentationLabel,
+  openWith,
+  buildMenuEntries,
+}: {
+  presentation: WorkspaceTabPresentation;
+  selected: boolean;
+  active: boolean;
+  onPress: () => void;
+  menuTestIDBase: string;
+  presentationLabel: string;
+  openWith: ReturnType<typeof useFilePanelOpenWithMenu>;
+  buildMenuEntries: (presentation: WorkspaceTabPresentation) => WorkspaceTabMenuEntry[];
+}) {
+  const menuEntries = buildMenuEntries(presentation);
+  const trailingAccessory = useMemo(
+    () => (
+      <MobileTabTrailingAccessory
+        menuTestIDBase={menuTestIDBase}
+        presentationLabel={presentationLabel}
+        menuEntries={menuEntries}
+        openWith={openWith}
+      />
+    ),
+    [menuTestIDBase, presentationLabel, menuEntries, openWith],
+  );
+  return (
+    <WorkspaceTabOptionRow
+      presentation={presentation}
+      selected={selected}
+      active={active}
+      onPress={onPress}
+      trailingAccessory={trailingAccessory}
+    />
+  );
+}
+
 function MobileWorkspaceTabOption({
   tab,
   tabIndex,
@@ -187,6 +233,7 @@ function MobileWorkspaceTabOption({
     () => ({
       copyResumeCommand: t("workspace.tabs.menu.copyResumeCommand"),
       copyAgentId: t("workspace.tabs.menu.copyAgentId"),
+      openTerminal: t("workspace.tabs.menu.openTerminal"),
       copyTerminalId: t("workspace.tabs.menu.copyTerminalId"),
       copyFilePath: t("workspace.tabs.menu.copyFilePath"),
       rename: t("workspace.tabs.menu.rename"),
@@ -202,24 +249,55 @@ function MobileWorkspaceTabOption({
     [t],
   );
   const menuTestIDBase = `workspace-tab-menu-${tab.tabId}`;
-  const menuEntries = buildWorkspaceTabMenuEntries({
-    surface: "mobile",
-    tab,
-    index: tabIndex,
-    tabCount,
-    menuTestIDBase,
-    onCopyResumeCommand,
-    onCopyAgentId,
-    onCopyTerminalId,
-    onCopyFilePath,
-    onReloadAgent,
-    onRenameTab,
-    onCloseTab,
-    onCloseTabsBefore: onCloseTabsAbove,
-    onCloseTabsAfter: onCloseTabsBelow,
-    onCloseOtherTabs,
-    labels: tabMenuLabels,
-  });
+  const onCopyTerminalResumeCommand = useCopyResumeCommand();
+  const onOpenAgentTerminal = useOpenWorkspaceTerminalTab(
+    normalizedServerId,
+    normalizedWorkspaceId,
+  );
+  const buildMenuEntries = useCallback(
+    (presentation: WorkspaceTabPresentation) =>
+      buildWorkspaceTabMenuEntries({
+        surface: "mobile",
+        tab,
+        index: tabIndex,
+        tabCount,
+        menuTestIDBase,
+        agentTerminalId: presentation.agentTerminalId,
+        onOpenAgentTerminal,
+        onCopyResumeCommand,
+        onCopyAgentId,
+        onCopyTerminalId,
+        terminalAgentSession: presentation.agentSession,
+        onCopyTerminalResumeCommand,
+        onCopyFilePath,
+        onReloadAgent,
+        onRenameTab,
+        onCloseTab,
+        onCloseTabsBefore: onCloseTabsAbove,
+        onCloseTabsAfter: onCloseTabsBelow,
+        onCloseOtherTabs,
+        labels: tabMenuLabels,
+      }),
+    [
+      tab,
+      tabIndex,
+      tabCount,
+      menuTestIDBase,
+      onOpenAgentTerminal,
+      onCopyResumeCommand,
+      onCopyAgentId,
+      onCopyTerminalId,
+      onCopyTerminalResumeCommand,
+      onCopyFilePath,
+      onReloadAgent,
+      onRenameTab,
+      onCloseTab,
+      onCloseTabsAbove,
+      onCloseTabsBelow,
+      onCloseOtherTabs,
+      tabMenuLabels,
+    ],
+  );
 
   const fallbackLabels = useMemo(
     () => ({
@@ -240,29 +318,20 @@ function MobileWorkspaceTabOption({
     { serverId: normalizedServerId, workspaceId: normalizedWorkspaceId, tabId: tab.tabId },
     menuTestIDBase,
   );
-  const trailingAccessory = useMemo(
-    () => (
-      <MobileTabTrailingAccessory
-        menuTestIDBase={menuTestIDBase}
-        presentationLabel={fallbackLabel}
-        menuEntries={menuEntries}
-        openWith={openWith}
-      />
-    ),
-    [menuTestIDBase, fallbackLabel, menuEntries, openWith],
-  );
-
   const renderPresentation = useCallback(
     (presentation: WorkspaceTabPresentation) => (
-      <WorkspaceTabOptionRow
+      <MobileWorkspaceTabOptionRow
         presentation={presentation}
         selected={selected}
         active={active}
         onPress={onPress}
-        trailingAccessory={trailingAccessory}
+        menuTestIDBase={menuTestIDBase}
+        presentationLabel={fallbackLabel}
+        openWith={openWith}
+        buildMenuEntries={buildMenuEntries}
       />
     ),
-    [selected, active, onPress, trailingAccessory],
+    [selected, active, onPress, menuTestIDBase, fallbackLabel, openWith, buildMenuEntries],
   );
 
   return (

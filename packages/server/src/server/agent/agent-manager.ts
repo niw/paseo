@@ -4431,6 +4431,12 @@ export class AgentManager {
       case "thread_started":
         this.onStreamThreadStarted(agent);
         return undefined;
+      case "history_reset":
+        flags.shouldDispatchEvent = false;
+        void this.replaceTimelineFromProvider(agent).catch((error: unknown) => {
+          this.logger.warn({ err: error, agentId: agent.id }, "Failed to rebuild the timeline");
+        });
+        return undefined;
       case "usage_updated":
         agent.lastUsage = event.usage;
         this.emitState(agent);
@@ -4509,6 +4515,21 @@ export class AgentManager {
       default:
         return undefined;
     }
+  }
+
+  // Rebuilds the timeline like a rewind from Paseo does, for a history that changed outside it.
+  private async replaceTimelineFromProvider(agent: ActiveManagedAgent): Promise<void> {
+    await this.hydrateTimelineFromProvider(agent.id, {
+      force: true,
+      broadcast: true,
+      broadcastTimeline: false,
+    });
+    this.dispatch({
+      type: "timeline_replacement",
+      agentId: agent.id,
+      epoch: this.timelineStore.getEpoch(agent.id),
+    });
+    await this.persistSnapshot(agent);
   }
 
   private onStreamThreadStarted(agent: ActiveManagedAgent): void {
@@ -5350,6 +5371,7 @@ export class AgentManager {
     }
     const context: AgentLaunchContext = {
       agentId,
+      ...(opening?.workspaceId ? { workspaceId: opening.workspaceId } : {}),
       env: {
         ...env,
         PASEO_AGENT_ID: agentId,

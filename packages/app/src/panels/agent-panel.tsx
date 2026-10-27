@@ -62,7 +62,8 @@ import { TimelineSyncStatus } from "@/timeline/sync-status";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import { useAgentFactsLine } from "@/panels/agent-facts-line";
 import { PaneSubtitle } from "@/panels/pane-subtitle";
-import { definePanel } from "@/panels/panel-registry";
+import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
+import { useWorkspaceTerminalList } from "@/screens/workspace/terminals/use-workspace-terminal-list";
 import { RenderProfile } from "@/utils/render-profiler";
 import { useHasPluginComposerPills } from "@/plugins";
 import { buildDraftPanelDescriptor } from "@/panels/draft-panel-descriptor";
@@ -369,9 +370,24 @@ export function AgentConversationPanel() {
   invariant(false, "AgentConversationPanel requires an agent or draft target");
 }
 
+function useAgentPanelDescriptor(
+  target: { kind: "agent"; agentId: string },
+  context: { serverId: string; workspaceId: string },
+): PanelDescriptor {
+  const descriptor = useAgentDescriptor(target, context);
+  const terminalsQuery = useWorkspaceTerminalList(context);
+  const agentTerminalId = terminalsQuery.data?.terminals.find(
+    (terminal) => terminal.agentId === target.agentId,
+  )?.id;
+  return useMemo(
+    () => (agentTerminalId ? { ...descriptor, agentTerminalId } : descriptor),
+    [agentTerminalId, descriptor],
+  );
+}
+
 export const agentPanelRegistration = definePanel("agent", {
   component: AgentConversationPanel,
-  useDescriptor: useAgentDescriptor,
+  useDescriptor: useAgentPanelDescriptor,
 });
 
 export function useDraftPanelDescriptor(

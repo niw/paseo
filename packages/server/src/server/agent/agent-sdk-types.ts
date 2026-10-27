@@ -407,6 +407,11 @@ export type AgentTimelineItem =
 
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }
+  /**
+   * The provider's history changed in place, such as after a rewind in the provider's own UI.
+   * streamHistory yields the whole history again, and the timeline is rebuilt from it.
+   */
+  | { type: "history_reset"; provider: AgentProvider }
   | { type: "turn_started"; provider: AgentProvider; turnId?: string }
   | { type: "turn_completed"; provider: AgentProvider; usage?: AgentUsage; turnId?: string }
   | { type: "usage_updated"; provider: AgentProvider; usage: AgentUsage; turnId?: string }
@@ -617,6 +622,8 @@ export interface AgentSessionConfig {
 
 export interface AgentLaunchContext {
   agentId?: string;
+  /** The workspace the agent opens in, for providers that create workspace resources. */
+  workspaceId?: string;
   env?: Record<string, string>;
   /**
    * Runtime-only internal Paseo tools. This must never be persisted into

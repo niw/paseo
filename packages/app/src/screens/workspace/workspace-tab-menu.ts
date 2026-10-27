@@ -2,10 +2,13 @@ import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-
 import { i18n } from "@/i18n/i18next";
 import { encodeFilePathForPathSegment, encodeWorkspaceIdForPathSegment } from "@/utils/host-routes";
 import { buildDeterministicWorkspaceTabId } from "@/workspace-tabs/identity";
+import { buildProviderCommand } from "@/utils/provider-command-templates";
+import type { TerminalAgentSession } from "@getpaseo/protocol/messages";
 
 export type WorkspaceTabMenuSurface = "desktop" | "mobile";
 
 export interface WorkspaceTabMenuLabels {
+  openTerminal: string;
   copyResumeCommand: string;
   copyAgentId: string;
   copyTerminalId: string;
@@ -22,6 +25,7 @@ export interface WorkspaceTabMenuLabels {
 }
 
 export const DEFAULT_WORKSPACE_TAB_MENU_LABELS: WorkspaceTabMenuLabels = {
+  openTerminal: i18n.t("workspace.tabs.menu.openTerminal"),
   copyResumeCommand: i18n.t("workspace.tabs.menu.copyResumeCommand"),
   copyAgentId: i18n.t("workspace.tabs.menu.copyAgentId"),
   copyTerminalId: i18n.t("workspace.tabs.menu.copyTerminalId"),
@@ -43,6 +47,7 @@ export type WorkspaceTabMenuEntry =
       key: string;
       label: string;
       icon?:
+        | "terminal"
         | "copy"
         | "rotate-cw"
         | "arrow-left-to-line"
@@ -73,9 +78,15 @@ interface BuildWorkspaceTabMenuEntriesInput {
   index: number;
   tabCount: number;
   menuTestIDBase: string;
+  /** The terminal an agent tab's provider runs in, which the menu can open. */
+  agentTerminalId?: string | null;
+  onOpenAgentTerminal?: (terminalId: string) => void;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
+  /** The agent session running in a terminal tab, such as Claude Code. */
+  terminalAgentSession?: TerminalAgentSession | null;
+  onCopyTerminalResumeCommand?: (command: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
@@ -90,9 +101,13 @@ interface BuildWorkspaceDesktopTabActionsInput {
   tab: WorkspaceTabDescriptor;
   index: number;
   tabCount: number;
+  agentTerminalId?: string | null;
+  onOpenAgentTerminal?: (terminalId: string) => void;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
+  terminalAgentSession?: TerminalAgentSession | null;
+  onCopyTerminalResumeCommand?: (command: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
@@ -177,9 +192,13 @@ export function buildWorkspaceTabMenuEntries(
     index,
     tabCount,
     menuTestIDBase,
+    agentTerminalId,
+    onOpenAgentTerminal,
     onCopyResumeCommand,
     onCopyAgentId,
     onCopyTerminalId,
+    terminalAgentSession,
+    onCopyTerminalResumeCommand,
     onCopyFilePath,
     onReloadAgent,
     onRenameTab,
@@ -196,6 +215,18 @@ export function buildWorkspaceTabMenuEntries(
 
   if (tab.target.kind === "agent") {
     const { agentId } = tab.target;
+    if (agentTerminalId && onOpenAgentTerminal) {
+      entries.push({
+        kind: "item",
+        key: "open-terminal",
+        label: labels.openTerminal,
+        icon: "terminal",
+        testID: `${menuTestIDBase}-open-terminal`,
+        onSelect: () => {
+          onOpenAgentTerminal(agentTerminalId);
+        },
+      });
+    }
     entries.push({
       kind: "item",
       key: "copy-resume-command",
@@ -221,6 +252,25 @@ export function buildWorkspaceTabMenuEntries(
 
   if (tab.target.kind === "terminal") {
     const { terminalId } = tab.target;
+    const terminalResumeCommand = terminalAgentSession
+      ? buildProviderCommand({
+          provider: terminalAgentSession.provider,
+          id: "resume",
+          sessionId: terminalAgentSession.sessionId,
+        })
+      : null;
+    if (terminalResumeCommand && onCopyTerminalResumeCommand) {
+      entries.push({
+        kind: "item",
+        key: "copy-resume-command",
+        label: labels.copyResumeCommand,
+        icon: "copy",
+        testID: `${menuTestIDBase}-copy-resume-command`,
+        onSelect: () => {
+          void onCopyTerminalResumeCommand(terminalResumeCommand);
+        },
+      });
+    }
     entries.push({
       kind: "item",
       key: "copy-terminal-id",
@@ -339,9 +389,13 @@ export function buildWorkspaceDesktopTabActions(
       index: input.index,
       tabCount: input.tabCount,
       menuTestIDBase: contextMenuTestId,
+      agentTerminalId: input.agentTerminalId,
+      onOpenAgentTerminal: input.onOpenAgentTerminal,
       onCopyResumeCommand: input.onCopyResumeCommand,
       onCopyAgentId: input.onCopyAgentId,
       onCopyTerminalId: input.onCopyTerminalId,
+      terminalAgentSession: input.terminalAgentSession,
+      onCopyTerminalResumeCommand: input.onCopyTerminalResumeCommand,
       onCopyFilePath: input.onCopyFilePath,
       onReloadAgent: input.onReloadAgent,
       onRenameTab: input.onRenameTab,

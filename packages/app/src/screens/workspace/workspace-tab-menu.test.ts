@@ -231,6 +231,93 @@ describe("buildWorkspaceTabMenuEntries", () => {
     expect(onRenameTab).toHaveBeenCalledWith(terminalTab);
   });
 
+  it("includes copy resume command for terminals running an agent session", () => {
+    const onCopyTerminalResumeCommand = vi.fn();
+    const agentSession = { provider: "claude", sessionId: "session-1" };
+    const entries = buildWorkspaceTabMenuEntries({
+      surface: "desktop",
+      tab: {
+        key: "terminal_abc",
+        tabId: "terminal_abc",
+        kind: "terminal",
+        target: { kind: "terminal", terminalId: "terminal-abc" },
+      },
+      index: 0,
+      tabCount: 1,
+      menuTestIDBase: "workspace-tab-context-terminal_abc",
+      onCopyResumeCommand: vi.fn(),
+      onCopyAgentId: vi.fn(),
+      onCopyTerminalId: vi.fn(),
+      terminalAgentSession: agentSession,
+      onCopyTerminalResumeCommand,
+      onCopyFilePath: vi.fn(),
+      onReloadAgent: vi.fn(),
+      onRenameTab: vi.fn(),
+      onCloseTab: vi.fn(),
+      onCloseTabsBefore: vi.fn(),
+      onCloseTabsAfter: vi.fn(),
+      onCloseOtherTabs: vi.fn(),
+    });
+
+    const labels = entries.filter((entry) => entry.kind === "item").map((entry) => entry.label);
+    expect(labels.slice(0, 3)).toEqual(["Copy resume command", "Copy terminal id", "Rename"]);
+
+    const resumeEntry = entries.find(
+      (entry) => entry.kind === "item" && entry.key === "copy-resume-command",
+    );
+    if (!resumeEntry || resumeEntry.kind !== "item") {
+      throw new Error("Copy resume command entry missing");
+    }
+    expect(resumeEntry.testID).toBe("workspace-tab-context-terminal_abc-copy-resume-command");
+    resumeEntry.onSelect();
+    expect(onCopyTerminalResumeCommand).toHaveBeenCalledWith("claude --resume session-1");
+  });
+
+  it("opens the terminal an agent runs in from the agent's menu", () => {
+    const onOpenAgentTerminal = vi.fn();
+    const input = {
+      surface: "mobile" as const,
+      tab: {
+        key: "agent_abc",
+        tabId: "agent_abc",
+        kind: "agent" as const,
+        target: { kind: "agent" as const, agentId: "agent-abc" },
+      },
+      index: 0,
+      tabCount: 1,
+      menuTestIDBase: "workspace-tab-menu-agent_abc",
+      onOpenAgentTerminal,
+      onCopyResumeCommand: vi.fn(),
+      onCopyAgentId: vi.fn(),
+      onCopyTerminalId: vi.fn(),
+      onCopyFilePath: vi.fn(),
+      onReloadAgent: vi.fn(),
+      onRenameTab: vi.fn(),
+      onCloseTab: vi.fn(),
+      onCloseTabsBefore: vi.fn(),
+      onCloseTabsAfter: vi.fn(),
+      onCloseOtherTabs: vi.fn(),
+    };
+
+    expect(
+      buildWorkspaceTabMenuEntries(input).some(
+        (entry) => entry.kind === "item" && entry.key === "open-terminal",
+      ),
+    ).toBe(false);
+    const entries = buildWorkspaceTabMenuEntries({ ...input, agentTerminalId: "terminal-1" });
+    const openEntry = entries[0];
+    if (!openEntry || openEntry.kind !== "item") {
+      throw new Error("Open terminal entry missing");
+    }
+    expect(openEntry).toMatchObject({
+      key: "open-terminal",
+      label: "Open terminal",
+      testID: "workspace-tab-menu-agent_abc-open-terminal",
+    });
+    openEntry.onSelect();
+    expect(onOpenAgentTerminal).toHaveBeenCalledWith("terminal-1");
+  });
+
   it("includes copy file path for file tabs", () => {
     const onCopyFilePath = vi.fn();
     const fileTab: WorkspaceTabDescriptor = {

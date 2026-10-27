@@ -27,6 +27,7 @@ export type ProviderIconComponent = ComponentType<ProviderIconProps>;
 const BUILTIN_PROVIDER_ICONS: Record<string, ProviderIconComponent> = {
   antigravity: AntigravityIcon as unknown as ProviderIconComponent,
   claude: ClaudeIcon as unknown as ProviderIconComponent,
+  "claude-terminal": ClaudeIcon as unknown as ProviderIconComponent,
   codex: CodexIcon as unknown as ProviderIconComponent,
   copilot: CopilotIcon as unknown as ProviderIconComponent,
   kiro: KiroIcon as unknown as ProviderIconComponent,

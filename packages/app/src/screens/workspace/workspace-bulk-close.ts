@@ -52,6 +52,7 @@ interface CloseBulkWorkspaceTabsInput {
 export function classifyBulkClosableTabs(
   tabs: WorkspaceTabDescriptor[],
   resolveAgentCloseKind: (agentId: string) => "archive" | "layout-only" = () => "archive",
+  isAgentTerminal: (terminalId: string) => boolean = () => false,
 ): BulkClosableTabGroups {
   const groups: BulkClosableTabGroups = {
     archiveAgentTabs: [],
@@ -70,7 +71,8 @@ export function classifyBulkClosableTabs(
       }
       continue;
     }
-    if (tab.target.kind === "terminal") {
+    // An agent's terminal outlives its tab, since the agent runs in it.
+    if (tab.target.kind === "terminal" && !isAgentTerminal(tab.target.terminalId)) {
       groups.terminalTabs.push({ tabId: tab.tabId, terminalId: tab.target.terminalId });
       continue;
     }

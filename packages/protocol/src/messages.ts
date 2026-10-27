@@ -6473,6 +6473,15 @@ export const ListCommandsResponseSchema = z.object({
 // Terminal Outbound Messages
 // ============================================================================
 
+// The agent session running in a terminal, such as Claude Code started from its shell.
+// `provider` stays a string so a new provider never breaks an older client.
+export const TerminalAgentSessionSchema = z.object({
+  provider: z.string(),
+  sessionId: z.string(),
+});
+
+export type TerminalAgentSession = z.infer<typeof TerminalAgentSessionSchema>;
+
 const TerminalInfoSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -6480,6 +6489,9 @@ const TerminalInfoSchema = z.object({
   workspaceId: z.string().optional(),
   title: z.string().optional(),
   activity: TerminalActivitySchema.nullable().optional(),
+  agentSession: TerminalAgentSessionSchema.optional(),
+  // The Paseo agent whose provider runs in this terminal, such as a Claude (Terminal) agent.
+  agentId: z.string().optional(),
 });
 
 export const TerminalCellSchema = z.object({

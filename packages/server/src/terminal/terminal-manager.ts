@@ -11,6 +11,7 @@ import { resolve, sep } from "node:path";
 import { assertAbsolutePath, isSameOrDescendantPath } from "../server/path-utils.js";
 import type { TerminalActivity, TerminalActivityState } from "@getpaseo/protocol/terminal-activity";
 import { deriveTerminalActivityStatusBucket } from "@getpaseo/protocol/terminal-activity";
+import type { TerminalAgentSession } from "@getpaseo/protocol/messages";
 
 export interface TerminalListItem {
   id: string;
@@ -19,6 +20,8 @@ export interface TerminalListItem {
   workspaceId: string;
   title?: string;
   activity: TerminalActivity | null;
+  agentSession?: TerminalAgentSession;
+  agentId?: string;
 }
 
 export interface TerminalsChangedEvent {
@@ -35,6 +38,7 @@ export interface TerminalActivityTransitionEvent {
   workspaceId: string;
   activity: TerminalActivity | null;
   previous: TerminalActivity | null;
+  statusMessage?: string;
 }
 
 export type TerminalActivityListener = (event: TerminalActivityTransitionEvent) => void;
@@ -55,6 +59,7 @@ export interface TerminalManager {
     id?: string;
     cwd: string;
     workspaceId: string;
+    agentId?: string;
     name?: string;
     title?: string;
     env?: Record<string, string>;
@@ -109,6 +114,7 @@ export function createTerminalManager(
   const terminalExitUnsubscribeById = new Map<string, () => void>();
   const terminalTitleUnsubscribeById = new Map<string, () => void>();
   const terminalActivityUnsubscribeById = new Map<string, () => void>();
+  const terminalAgentSessionUnsubscribeById = new Map<string, () => void>();
   const terminalActivityTokenById = new Map<string, string>();
   const terminalsChangedListeners = new Set<TerminalsChangedListener>();
   const terminalActivityListeners = new Set<TerminalActivityListener>();
@@ -136,6 +142,11 @@ export function createTerminalManager(
     if (unsubscribeActivity) {
       unsubscribeActivity();
       terminalActivityUnsubscribeById.delete(id);
+    }
+    const unsubscribeAgentSession = terminalAgentSessionUnsubscribeById.get(id);
+    if (unsubscribeAgentSession) {
+      unsubscribeAgentSession();
+      terminalAgentSessionUnsubscribeById.delete(id);
     }
 
     terminalsById.delete(id);
@@ -194,6 +205,9 @@ export function createTerminalManager(
     const unsubscribeTitle = session.onTitleChange(() => {
       emitTerminalsChanged({ cwd: session.cwd });
     });
+    const unsubscribeAgentSession = session.onAgentSessionChange(() => {
+      emitTerminalsChanged({ cwd: session.cwd });
+    });
     const unsubscribeActivity = session.onActivityChange((transition) => {
       emitTerminalActivityTransition({ session, transition });
       emitTerminalsChanged({ cwd: session.cwd });
@@ -210,10 +224,12 @@ export function createTerminalManager(
     terminalExitUnsubscribeById.set(session.id, unsubscribeExit);
     terminalTitleUnsubscribeById.set(session.id, unsubscribeTitle);
     terminalActivityUnsubscribeById.set(session.id, unsubscribeActivity);
+    terminalAgentSessionUnsubscribeById.set(session.id, unsubscribeAgentSession);
     return session;
   }
 
   function toTerminalListItem(input: { session: TerminalSession }): TerminalListItem {
+    const agentSession = input.session.getAgentSession();
     return {
       id: input.session.id,
       name: input.session.name,
@@ -221,6 +237,8 @@ export function createTerminalManager(
       workspaceId: input.session.workspaceId,
       title: input.session.getTitle(),
       activity: input.session.getActivity(),
+      ...(agentSession ? { agentSession } : {}),
+      ...(input.session.agentId ? { agentId: input.session.agentId } : {}),
     };
   }
 
@@ -260,6 +278,7 @@ export function createTerminalManager(
       workspaceId: input.session.workspaceId,
       activity: input.transition.activity,
       previous: input.transition.previous,
+      ...(input.transition.statusMessage ? { statusMessage: input.transition.statusMessage } : {}),
     };
     for (const listener of terminalActivityListeners) {
       try {
@@ -312,6 +331,7 @@ export function createTerminalManager(
       id?: string;
       cwd: string;
       workspaceId: string;
+      agentId?: string;
       name?: string;
       title?: string;
       env?: Record<string, string>;
@@ -348,6 +368,7 @@ export function createTerminalManager(
             id: terminalId,
             cwd: options.cwd,
             workspaceId: options.workspaceId,
+            ...(options.agentId ? { agentId: options.agentId } : {}),
             name: options.name ?? defaultName,
             ...(options.title ? { title: options.title } : {}),
             ...(options.command ? { command: options.command } : {}),
