@@ -168,7 +168,7 @@ export function PageTitle({
         {actions}
       </View>
       {description ? (
-        <Text style={styles.description} testID={descriptionTestID}>
+        <Text style={styles.description} selectable testID={descriptionTestID}>
           {description}
         </Text>
       ) : null}

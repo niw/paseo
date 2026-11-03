@@ -36,7 +36,8 @@ export function SettingsBackLink({
 /**
  * The top of a settings detail page: the icon and name of the thing the page is about, with an
  * optional action after the name. On wide layouts it is the page's title and names the parent page
- * first, which goes back to it. On compact layouts the back header already names the parent.
+ * first, which goes back to it. On compact layouts the back header already names the parent. A
+ * selectable line under the name can tell same-named things apart.
  */
 export function SettingsDetailHeader({
   parent,
@@ -44,6 +45,8 @@ export function SettingsDetailHeader({
   title,
   trailing,
   titleTestID,
+  subtitle,
+  subtitleTestID,
 }: {
   parent: PageTitleParent;
   icon?: ReactNode;
@@ -51,6 +54,8 @@ export function SettingsDetailHeader({
   title?: string;
   trailing?: ReactNode;
   titleTestID?: string;
+  subtitle?: string;
+  subtitleTestID?: string;
 }) {
   const isCompact = useIsCompactFormFactor();
   if (!isCompact)
@@ -60,17 +65,28 @@ export function SettingsDetailHeader({
         icon={icon}
         title={title}
         adornment={trailing}
+        description={subtitle}
         titleTestID={titleTestID}
+        descriptionTestID={subtitleTestID}
       />
     );
   if (title === undefined) return null;
-  return (
-    <View style={styles.titleRow}>
+  const row = (
+    <View style={subtitle ? styles.titleRowAboveSubtitle : styles.titleRow}>
       {icon}
       <Text style={styles.title} numberOfLines={1} testID={titleTestID}>
         {title}
       </Text>
       {trailing}
+    </View>
+  );
+  if (!subtitle) return row;
+  return (
+    <View style={styles.titleBlock}>
+      {row}
+      <Text style={styles.subtitle} selectable testID={subtitleTestID}>
+        {subtitle}
+      </Text>
     </View>
   );
 }
@@ -88,10 +104,25 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
     marginBottom: theme.spacing[4],
   },
+  titleRowAboveSubtitle: {
+    marginLeft: theme.spacing[1],
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+    marginBottom: theme.spacing[1],
+  },
+  titleBlock: {
+    marginBottom: theme.spacing[4],
+  },
   title: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     flexShrink: 1,
+  },
+  subtitle: {
+    marginLeft: theme.spacing[1],
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
 }));

@@ -291,6 +291,9 @@ function ProjectSettingsBody({
         icon={titleIcon}
         title={selectedHost.projectName}
         trailing={editButton}
+        // Projects can share a name, so the directory tells them apart.
+        subtitle={selectedHost.repoRoot}
+        subtitleTestID="project-directory"
       />
 
       <ProjectEditSheet
