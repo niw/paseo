@@ -289,6 +289,10 @@ function ProjectSettingsBody({
             <Pencil size={ICON_SIZE} color={styles.iconColor.color} />
           </Pressable>
         </View>
+        {/* Projects can share a name, so the directory tells them apart. */}
+        <Text style={styles.projectDirectory} selectable testID="project-directory">
+          {selectedHost.repoRoot}
+        </Text>
       </View>
 
       <ProjectEditSheet
@@ -1150,6 +1154,10 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     flexShrink: 1,
+  },
+  projectDirectory: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
   editButton: {
     padding: theme.spacing[1],
