@@ -91,8 +91,11 @@ interface PageTitleProps {
   adornment?: ReactNode;
   /** Controls for the whole page, drawn at the trailing edge. */
   actions?: ReactNode;
+  /** A selectable line under the title, such as a path that tells same-named things apart. */
+  subtitle?: string;
   testID?: string;
   titleTestID?: string;
+  subtitleTestID?: string;
 }
 
 /**
@@ -105,11 +108,13 @@ export function PageTitle({
   title,
   adornment,
   actions,
+  subtitle,
   testID,
   titleTestID = "page-title",
+  subtitleTestID,
 }: PageTitleProps) {
-  return (
-    <View style={styles.titleRow} testID={testID}>
+  const row = (
+    <View style={subtitle ? styles.titleRowAboveSubtitle : styles.titleRow} testID={testID}>
       <View style={styles.titleParts}>
         {parent ? (
           <PressHighlight
@@ -137,6 +142,15 @@ export function PageTitle({
         {adornment}
       </View>
       {actions}
+    </View>
+  );
+  if (!subtitle) return row;
+  return (
+    <View style={styles.titleBlock}>
+      {row}
+      <Text style={styles.subtitle} selectable testID={subtitleTestID}>
+        {subtitle}
+      </Text>
     </View>
   );
 }
@@ -172,6 +186,22 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     gap: theme.spacing[4],
     marginBottom: theme.spacing[6],
+  },
+  titleRowAboveSubtitle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[4],
+    marginBottom: theme.spacing[1],
+  },
+  titleBlock: {
+    marginBottom: theme.spacing[6],
+  },
+  subtitle: {
+    // Line up with the title, which sits inset like the section titles.
+    marginLeft: theme.spacing[1],
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
   titleParts: {
     // Line up with the section titles, which sit inset from their cards.
