@@ -36,6 +36,7 @@ import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
 import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop";
 import { type GestureType } from "react-native-gesture-handler";
 import { WorkspaceRenameModal } from "@/components/workspace-rename-modal";
+import { ProjectHoverCard } from "@/components/project-hover-card";
 import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-actions";
 import { ExternalLink, Settings, MoreVertical, Plus, Trash2 } from "lucide-react-native";
 import { NestableScrollContainer } from "react-native-draggable-flatlist";
@@ -849,6 +850,22 @@ function NewWorkspaceGhostRow({
   );
 }
 
+function ProjectHeaderRowLeading({
+  displayName,
+  ...leadingVisualProps
+}: ComponentProps<typeof ProjectLeadingVisual>) {
+  return (
+    <View style={styles.projectRowLeft}>
+      <ProjectLeadingVisual displayName={displayName} {...leadingVisualProps} />
+      <View style={styles.projectTitleGroup}>
+        <Text style={styles.projectTitle} numberOfLines={1}>
+          {displayName}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function ProjectHeaderRow({
   project,
   displayName,
@@ -944,24 +961,16 @@ function ProjectHeaderRow({
 
   const rowChildren = (
     <>
-      <View style={styles.projectRowLeft}>
-        <ProjectLeadingVisual
-          displayName={displayName}
-          iconDataUri={iconDataUri}
-          statusBucket={statusBucket}
-          projectViewKey={project.viewKey}
-          backdrop={getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered })}
-          chevron={chevron}
-          showChevron={isHovered && chevron !== null}
-          isArchiving={isArchiving}
-        />
-
-        <View style={styles.projectTitleGroup}>
-          <Text style={styles.projectTitle} numberOfLines={1}>
-            {displayName}
-          </Text>
-        </View>
-      </View>
+      <ProjectHeaderRowLeading
+        displayName={displayName}
+        iconDataUri={iconDataUri}
+        statusBucket={statusBucket}
+        projectViewKey={project.viewKey}
+        backdrop={getSidebarRowBackdrop({ isDragging, isPressed, selected, isHovered })}
+        chevron={chevron}
+        showChevron={isHovered && chevron !== null}
+        isArchiving={isArchiving}
+      />
       <ProjectRowTrailingActions
         projectViewKey={project.viewKey}
         displayName={displayName}
@@ -983,54 +992,65 @@ function ProjectHeaderRow({
     </>
   );
 
+  const hoverCardProps = {
+    projectName: displayName,
+    directories: project.hosts.map((host) => host.iconWorkingDir.trim()),
+    projectKey: project.viewKey,
+    disabled: isDragging || contextMenuOpen,
+  };
+
   if (!onRemoveProject) {
     return (
-      <View
-        {...dragAttributes}
-        {...dragHandleProps?.listeners}
-        ref={dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-      >
-        <PressHighlight
-          accessibilityRole="button"
-          style={projectRowStyle}
-          highlightStyle={styles.projectRowPressed}
-          onPressIn={handleProjectPressIn}
-          onTouchMove={interaction.handleTouchMove}
-          onPressOut={handleProjectPressOut}
-          onPress={handlePress}
-          testID={`sidebar-project-row-${project.viewKey}`}
+      <ProjectHoverCard {...hoverCardProps}>
+        <View
+          {...dragAttributes}
+          {...dragHandleProps?.listeners}
+          ref={dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>}
+          onPointerEnter={handlePointerEnter}
+          onPointerLeave={handlePointerLeave}
         >
-          {rowChildren}
-        </PressHighlight>
-      </View>
+          <PressHighlight
+            accessibilityRole="button"
+            style={projectRowStyle}
+            highlightStyle={styles.projectRowPressed}
+            onPressIn={handleProjectPressIn}
+            onTouchMove={interaction.handleTouchMove}
+            onPressOut={handleProjectPressOut}
+            onPress={handlePress}
+            testID={`sidebar-project-row-${project.viewKey}`}
+          >
+            {rowChildren}
+          </PressHighlight>
+        </View>
+      </ProjectHoverCard>
     );
   }
 
   return (
     <ContextMenu open={contextMenuOpen} onOpenChange={handleContextMenuOpenChange}>
-      <View
-        {...dragAttributes}
-        {...dragHandleProps?.listeners}
-        ref={dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-      >
-        <ContextMenuTrigger
-          enabledOnMobile={false}
-          accessibilityRole="button"
-          style={projectRowStyle}
-          highlightStyle={styles.projectRowPressed}
-          onPressIn={handleProjectPressIn}
-          onTouchMove={interaction.handleTouchMove}
-          onPressOut={handleProjectPressOut}
-          onPress={handlePress}
-          testID={`sidebar-project-row-${project.viewKey}`}
+      <ProjectHoverCard {...hoverCardProps}>
+        <View
+          {...dragAttributes}
+          {...dragHandleProps?.listeners}
+          ref={dragHandleProps?.setActivatorNodeRef as unknown as Ref<View>}
+          onPointerEnter={handlePointerEnter}
+          onPointerLeave={handlePointerLeave}
         >
-          {rowChildren}
-        </ContextMenuTrigger>
-      </View>
+          <ContextMenuTrigger
+            enabledOnMobile={false}
+            accessibilityRole="button"
+            style={projectRowStyle}
+            highlightStyle={styles.projectRowPressed}
+            onPressIn={handleProjectPressIn}
+            onTouchMove={interaction.handleTouchMove}
+            onPressOut={handleProjectPressOut}
+            onPress={handlePress}
+            testID={`sidebar-project-row-${project.viewKey}`}
+          >
+            {rowChildren}
+          </ContextMenuTrigger>
+        </View>
+      </ProjectHoverCard>
       <ContextMenuContent
         align="start"
         width={220}
