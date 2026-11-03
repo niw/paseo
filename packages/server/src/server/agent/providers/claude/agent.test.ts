@@ -70,6 +70,24 @@ describe("convertClaudeHistoryEntry", () => {
     ]);
   });
 
+  test("unwraps a long paste the user queued mid-turn", async () => {
+    const entry = {
+      type: "attachment",
+      uuid: "absorbed-2",
+      attachment: {
+        type: "queued_command",
+        prompt:
+          '\n\n<pasted_content id="8536">\nFirst line\nSecond line\n</pasted_content id="8536">\n',
+        commandMode: "prompt",
+        origin: { kind: "human" },
+      },
+    };
+
+    expect(await convertClaudeHistoryEntry(entry, () => [])).toEqual([
+      { type: "user_message", text: "First line\nSecond line", messageId: "absorbed-2" },
+    ]);
+  });
+
   test("skips queued commands that no human sent", async () => {
     const entry = {
       type: "attachment",
@@ -377,6 +395,46 @@ describe("convertClaudeHistoryEntry", () => {
     expect(await convertClaudeHistoryEntry(realMessage, mapBlocks)).toEqual([
       { type: "user_message", text: "fix the bug in auth.ts" },
     ]);
+  });
+
+  test("maps bash mode records to the typed command and skips their output", async () => {
+    // Real entries from a Claude Code 2.1.x transcript after typing `! launchctl …`.
+    const input = {
+      type: "user",
+      uuid: "ba79213f-c9ad-40fb-b98c-2eda9db77186",
+      message: {
+        role: "user",
+        content: "<bash-input> launchctl kickstart -k gui/$(id -u)/com.rustfs</bash-input>",
+      },
+    };
+    const output = {
+      type: "user",
+      uuid: "f47526de-b75a-48ad-8404-4fafb07f8dc0",
+      message: {
+        role: "user",
+        content:
+          "<bash-stdout>(Bash completed with no output)</bash-stdout><bash-stderr></bash-stderr>",
+      },
+    };
+    const stderrOnly = {
+      type: "user",
+      message: {
+        role: "user",
+        content:
+          "<bash-stdout></bash-stdout><bash-stderr>zsh: command not found: foo\n</bash-stderr>",
+      },
+    };
+    const mapBlocks = vi.fn().mockReturnValue([]);
+
+    expect(await convertClaudeHistoryEntry(input, mapBlocks)).toEqual([
+      {
+        type: "user_message",
+        text: "!launchctl kickstart -k gui/$(id -u)/com.rustfs",
+        messageId: "ba79213f-c9ad-40fb-b98c-2eda9db77186",
+      },
+    ]);
+    expect(await convertClaudeHistoryEntry(output, mapBlocks)).toEqual([]);
+    expect(await convertClaudeHistoryEntry(stderrOnly, mapBlocks)).toEqual([]);
   });
 
   test("maps task notifications to synthetic tool calls", async () => {

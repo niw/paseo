@@ -841,17 +841,28 @@ const LOCAL_COMMAND_STDOUT_PATTERN =
 const CLAUDE_COMMAND_MESSAGE_PATTERN = /<command-message>([\s\S]*?)<\/command-message>/;
 const CLAUDE_COMMAND_ARGS_PATTERN = /<command-args>([\s\S]*?)<\/command-args>/;
 const CLAUDE_COMMAND_NAME_PATTERN = /<command-name>([\s\S]*?)<\/command-name>/;
+// NOTE: Claude Code's bash mode (a prompt starting with `!`) records the command as
+// `<bash-input>…</bash-input>`, then its output as a separate user record of
+// `<bash-stdout>…</bash-stdout><bash-stderr>…</bash-stderr>`.
+const CLAUDE_BASH_INPUT_PATTERN = /^<bash-input>([\s\S]*?)<\/bash-input>$/;
+const CLAUDE_BASH_OUTPUT_PATTERN = /^\s*(?:<bash-(stdout|stderr)>[\s\S]*?<\/bash-\1>\s*)+$/;
 
 function isClaudeLocalCommandStdout(value: unknown): boolean {
   const normalized = normalizeClaudeTranscriptText(value);
   return normalized !== null && LOCAL_COMMAND_STDOUT_PATTERN.test(normalized);
 }
 
+function isClaudeBashOutput(value: unknown): boolean {
+  const normalized = normalizeClaudeTranscriptText(value);
+  return normalized !== null && CLAUDE_BASH_OUTPUT_PATTERN.test(normalized);
+}
+
 function isClaudeTranscriptNoiseText(value: unknown): boolean {
   return (
     isClaudeInterruptPlaceholderText(value) ||
     isClaudeNoResponsePlaceholderText(value) ||
-    isClaudeLocalCommandStdout(value)
+    isClaudeLocalCommandStdout(value) ||
+    isClaudeBashOutput(value)
   );
 }
 
@@ -6976,8 +6987,22 @@ function normalizeImportablePromptPreview(text: string): string | null {
   return normalized.length > 160 ? normalized.slice(0, 160) : normalized;
 }
 
+// NOTE: The interactive Claude Code CLI records a long paste as
+// `<pasted_content id="…">\n…\n</pasted_content id="…">` in the transcript, while the model and
+// the user saw the pasted text itself.
+const CLAUDE_PASTED_CONTENT_PATTERN =
+  /<pasted_content id="([^"]*)">\n?([\s\S]*?)\n?<\/pasted_content id="\1">/g;
+
+function unwrapClaudePastedContent(text: string): string {
+  return text.replace(CLAUDE_PASTED_CONTENT_PATTERN, (_match, _id, pasted: string) => pasted);
+}
+
 function normalizeClaudeUserPromptText(text: string): string | null {
-  const normalized = text.trim();
+  const normalized = unwrapClaudePastedContent(text).trim();
+  const bashCommand = normalized.match(CLAUDE_BASH_INPUT_PATTERN)?.[1]?.trim();
+  if (bashCommand !== undefined) {
+    return bashCommand ? `!${bashCommand}` : null;
+  }
   if (!CLAUDE_COMMAND_MESSAGE_PATTERN.test(normalized)) {
     return normalized || null;
   }
