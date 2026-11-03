@@ -70,6 +70,24 @@ describe("convertClaudeHistoryEntry", () => {
     ]);
   });
 
+  test("unwraps a long paste the user queued mid-turn", async () => {
+    const entry = {
+      type: "attachment",
+      uuid: "absorbed-2",
+      attachment: {
+        type: "queued_command",
+        prompt:
+          '\n\n<pasted_content id="8536">\nFirst line\nSecond line\n</pasted_content id="8536">\n',
+        commandMode: "prompt",
+        origin: { kind: "human" },
+      },
+    };
+
+    expect(await convertClaudeHistoryEntry(entry, () => [])).toEqual([
+      { type: "user_message", text: "First line\nSecond line", messageId: "absorbed-2" },
+    ]);
+  });
+
   test("skips queued commands that no human sent", async () => {
     const entry = {
       type: "attachment",
