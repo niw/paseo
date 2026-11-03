@@ -6972,8 +6972,18 @@ function normalizeImportablePromptPreview(text: string): string | null {
   return normalized.length > 160 ? normalized.slice(0, 160) : normalized;
 }
 
+// NOTE: The interactive Claude Code CLI records a long paste as
+// `<pasted_content id="…">\n…\n</pasted_content id="…">` in the transcript, while the model and
+// the user saw the pasted text itself.
+const CLAUDE_PASTED_CONTENT_PATTERN =
+  /<pasted_content id="([^"]*)">\n?([\s\S]*?)\n?<\/pasted_content id="\1">/g;
+
+function unwrapClaudePastedContent(text: string): string {
+  return text.replace(CLAUDE_PASTED_CONTENT_PATTERN, (_match, _id, pasted: string) => pasted);
+}
+
 function normalizeClaudeUserPromptText(text: string): string | null {
-  const normalized = text.trim();
+  const normalized = unwrapClaudePastedContent(text).trim();
   if (!CLAUDE_COMMAND_MESSAGE_PATTERN.test(normalized)) {
     return normalized || null;
   }

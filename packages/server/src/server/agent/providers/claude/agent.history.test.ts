@@ -30,6 +30,20 @@ describe("extractUserMessageText", () => {
     expect(extractUserMessageText(content)).toBe("/caveman:caveman");
   });
 
+  test("returns pasted text without the tags Claude Code wraps it in", () => {
+    const content =
+      '\n\n<pasted_content id="f4cf">\nFirst line\n---\nSecond line\n</pasted_content id="f4cf">\n';
+
+    expect(extractUserMessageText(content)).toBe("First line\n---\nSecond line");
+  });
+
+  test("keeps typed text around pasted text", () => {
+    const content =
+      'Look at this:\n<pasted_content id="a1">\nnpm error code 2\n</pasted_content id="a1">\nWhy?';
+
+    expect(extractUserMessageText(content)).toBe("Look at this:\nnpm error code 2\nWhy?");
+  });
+
   test("returns null when no textual content is present", () => {
     const content = [
       { type: "image", source: "foo.png" },
