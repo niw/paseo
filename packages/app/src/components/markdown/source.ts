@@ -11,9 +11,15 @@ import type { Link, Nodes, Paragraph, PhrasingContent, Root } from "mdast";
 
 // Keep this regex in the syntax shared by JavaScript, ICU and java.util.regex.
 // The Unicode flag makes Metro expand it to escapes rejected by native engines.
-const PATH_CHARACTER = String.raw`[a-zA-Z0-9\u0080-\uFFFF_@.%+-]`;
+// Latin-1, general and fullwidth punctuation blocks, and the CJK brackets and punctuation. Prose
+// like 「README.md」 or （https://example.com） puts them next to a path or URL without a space.
+// The rest of the CJK block, like 々 and 〆, is part of words.
+const NON_ASCII_PUNCTUATION = String.raw`\u00A0-\u00BF\u2000-\u206F\u3000-\u3003\u3008-\u3011\u3014-\u301F\uFF01-\uFF0F\uFF1A-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65`;
+// Non-ASCII filename characters, minus NON_ASCII_PUNCTUATION.
+const NON_ASCII_PATH_CHARACTER = String.raw`\u00C0-\u1FFF\u2070-\u2FFF\u3004-\u3007\u3012\u3013\u3020-\uFEFF\uFF10-\uFF19\uFF21-\uFF3A\uFF41-\uFF5A\uFF66-\uFFFF`;
+const PATH_CHARACTER = String.raw`[a-zA-Z0-9${NON_ASCII_PATH_CHARACTER}_@.%+-]`;
 const PATH_LETTER = String.raw`[a-zA-Z]`;
-const PATH_SEGMENT = String.raw`${PATH_CHARACTER}*[a-zA-Z0-9\u0080-\uFFFF_@%+-]`;
+const PATH_SEGMENT = String.raw`${PATH_CHARACTER}*[a-zA-Z0-9${NON_ASCII_PATH_CHARACTER}_@%+-]`;
 const LINE_SUFFIX = String.raw`(?::\d+(?::\d+)?(?:-\d+(?::\d+)?)?)?`;
 const FILE_EXTENSIONS = [...ASSISTANT_FILE_EXTENSIONS]
   .map((extension) => extension.replace(/[a-z]/g, (letter) => `[${letter}${letter.toUpperCase()}]`))
@@ -30,19 +36,17 @@ function createTextPattern(path: string, forgeReferencePattern?: string): RegExp
   const forgeReference = forgeReferencePattern ? `|${forgeReferencePattern}` : "";
   // The native adapter mistakes a literal + in lookbehind for a quantifier; use its hex escape.
   return new RegExp(
-    String.raw`(?:${BARE_URL}${forgeReference}|(?<![a-zA-Z0-9\u0080-\uFFFF_@.%\x2b~:/\\-])(?:${path}|${FILE_NAME})${LINE_SUFFIX}(?![a-zA-Z0-9\u0080-\uFFFF_@%+:/\\-]|\.${PATH_CHARACTER}))`,
+    String.raw`(?:${BARE_URL}${forgeReference}|(?<![a-zA-Z0-9${NON_ASCII_PATH_CHARACTER}_@.%\x2b~:/\\-])(?:${path}|${FILE_NAME})${LINE_SUFFIX}(?![a-zA-Z0-9${NON_ASCII_PATH_CHARACTER}_@%+:/\\-]|\.${PATH_CHARACTER}))`,
     "g",
   );
 }
 
 // Matches bare URLs that MD4C does not autolink, like single-label or bracketed hosts.
-// Quotes and unbalanced closing parentheses end the URL. Trailing sentence punctuation stays outside.
-// CJK, fullwidth and typographic punctuation (、。，（）【】「」“”…) also ends it; CJK letters do not.
-const URL_BOUNDARY =
-  "\\u2018\\u2019\\u201C\\u201D\\u2026\\u3000-\\u3003\\u3008-\\u3011\\u3014-\\u301F\\uFF01-\\uFF0F\\uFF1A-\\uFF20\\uFF3B-\\uFF40\\uFF5B-\\uFF65";
-const URL_CHARACTER = String.raw`[^\s<>()"'\x60${URL_BOUNDARY}]`;
+// Quotes, non-ASCII punctuation and unbalanced closing parentheses end the URL. Trailing sentence
+// punctuation stays outside.
+const URL_CHARACTER = String.raw`[^\s<>()"'\x60${NON_ASCII_PUNCTUATION}]`;
 const URL_GROUP = String.raw`\(${URL_CHARACTER}*\)`;
-const BARE_URL = String.raw`https?://(?:${URL_CHARACTER}|${URL_GROUP})*(?:[^\s<>()"'\x60.,;:!?${URL_BOUNDARY}]|${URL_GROUP})`;
+const BARE_URL = String.raw`https?://(?:${URL_CHARACTER}|${URL_GROUP})*(?:[^\s<>()"'\x60.,;:!?${NON_ASCII_PUNCTUATION}]|${URL_GROUP})`;
 
 const TEXT_PATTERN = createTextPattern(PROSE_PATH);
 // One entry per distinct workspace forge remote; reuse keeps the engine's regex identity stable.

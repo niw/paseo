@@ -4429,6 +4429,29 @@ md_scan_right_for_resolved_mark(MD_CTX* ctx, MD_MARK* mark_from, OFF off, MD_MAR
     return NULL;
 }
 
+/* Latin-1, general and fullwidth punctuation blocks, and the CJK brackets and punctuation, end a
+ * permissive URL. The rest of the CJK block, like 0x3005, is part of words. */
+static int
+md_is_url_ending_punct__(unsigned codepoint)
+{
+    return (codepoint >= 0x00a0  &&  codepoint <= 0x00bf)  ||
+           (codepoint >= 0x2000  &&  codepoint <= 0x206f)  ||
+           (codepoint >= 0x3000  &&  codepoint <= 0x3003)  ||
+           (codepoint >= 0x3008  &&  codepoint <= 0x3011)  ||
+           (codepoint >= 0x3014  &&  codepoint <= 0x301f)  ||
+           (codepoint >= 0xff01  &&  codepoint <= 0xff0f)  ||
+           (codepoint >= 0xff1a  &&  codepoint <= 0xff20)  ||
+           (codepoint >= 0xff3b  &&  codepoint <= 0xff40)  ||
+           (codepoint >= 0xff5b  &&  codepoint <= 0xff65);
+}
+
+static int
+md_is_url_ending_punct_at(MD_CTX* ctx, OFF off)
+{
+    SZ char_size;
+    return md_is_url_ending_punct__(md_decode_unicode(ctx->text, off, ctx->size, &char_size));
+}
+
 static int
 md_analyze_permissive_autolink_segment(MD_CTX* ctx, OFF off, OFF end, OFF* p_end,
             int scan_backwards, MD_CHAR component_delim, const MD_CHAR* word_extra,
@@ -4577,14 +4600,17 @@ md_analyze_permissive_autolink(MD_CTX* ctx, int mark_index)
         OFF n_open_brackets = 0;
         OFF n_close_brackets = 0;
 
-        /* Scan a continuous URL tail, stopping at whitespace or '<'.
+        /* Scan a continuous URL tail, stopping at whitespace, '<', or non-ASCII
+         * punctuation. Prose like "（https://example.com）は" or
+         * "https://example.com/a。次" puts it right after a URL.
          * Keep the mark check so URLs cannot cross resolved Markdown syntax. */
         while(off < line_end) {
             SZ char_size;
             int codepoint = md_decode_unicode(ctx->text, off, ctx->size, &char_size);
 
             if(ISUNICODEWHITESPACE_(codepoint) || codepoint == '<' ||
-                    codepoint < 0x20 || codepoint == 0x7f)
+                    codepoint < 0x20 || codepoint == 0x7f ||
+                    md_is_url_ending_punct__(codepoint))
                 break;
             if(codepoint >= 128) {
                 off += char_size;
@@ -4629,6 +4655,7 @@ md_analyze_permissive_autolink(MD_CTX* ctx, int mark_index)
      * resolved closer mark just after the suspected autolink. */
     if(end < line_end && !ISUNICODEWHITESPACE(end) &&
             !ISANYOF(end, _T(")}].!?,;:")) &&
+            !md_is_url_ending_punct_at(ctx, end) &&
             !(opener->ch != '@' && ISANYOF(end, _T(":*_~'\"<")))) {
         MD_MARK* mark;
 
