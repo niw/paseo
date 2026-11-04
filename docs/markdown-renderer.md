@@ -26,6 +26,10 @@ Native code blocks use the library's copy control and compiled grammars. Web cod
 
 The package patch also keeps overflowing native horizontal blocks in control of their drags: Android claims parent interception at touch-down and releases it for vertical drags so the chat list can scroll; iOS keeps its scroll recognizer active for outward drags at the leading edge. This prevents compact sidebar pans from taking block scrolling without changing sidebar swipes on prose or non-overflowing blocks. Native changes require a client rebuild.
 
+The patched MD4C parses emphasis and strikethrough by the [markdown-cjk-friendly](https://github.com/tats-u/markdown-cjk-friendly/blob/main/specification.md) rules, so `**「太字」**です` and `これは~~不要~~です` render as marked. Its CJK table in `md4c.c` mirrors `micromark-extension-cjk-friendly-util`; regenerate it from `get-east-asian-width` when that package changes. Strikethrough uses GFM flanking rules: `foo~~bar~~baz` strikes and `~~ foo ~~` stays literal.
+
+Web runs MD4C as WASM embedded in `src/web/wasm/md4c.js`, so a `cpp/` change does nothing on web until you rebuild it. Run the commands in the library's `cpp/wasm/build.sh` with emsdk 4.0.10, drop `GROWABLE_ARRAYBUFFERS`, and add `-fmacro-prefix-map=<cpp root>=react-native-enriched-markdown/cpp` so your home path is not embedded. Only the base64 binary changes. Replace it in `src/web/wasm/md4c.js`, `lib/module/web/wasm/md4c.js` and that file's source map, then regenerate the patch.
+
 Android measurements use a size-only, 512-entry LRU across view unmounts, matching the library’s existing iOS cache. Scrolling back through history can reuse layout sizes without parsing those rows again. Content, layout props and width identify each entry; font-scale changes and native layout invalidation discard affected sizes. The cache retains no views or spans.
 
 The library determines how incomplete Markdown appears during streaming. Completed text uses the same component and engine as history. Find and scroll-to-message address source message ids; selection-copy understands semantic HTML and the web code component's copy metadata.
