@@ -334,6 +334,31 @@ describe("bare URL sentence punctuation", () => {
     ]);
   });
 
+  it.each([
+    ["詳細（", "https://example.com/a", "）を参照。"],
+    ["「", "https://example.com/a", "」を開く"],
+    ["", "https://example.com/path", "。次の文"],
+    ["", "https://example.com", "、次"],
+    ["", "https://ja.wikipedia.org/wiki/日本語", "。次"],
+    ["See ", "https://example.com/a", "” now"],
+  ])("ends a bare URL at non-ASCII punctuation: %s%s%s", async (before, url, after) => {
+    const prepared = prepareMarkdownSource(`${before}${url}${after}`);
+    const tree = recognizeTextLinks(
+      await parseMarkdown(prepared.render(), { latexMath: false }),
+      prepared.linkRecognition.text,
+      prepared.linkRecognition.inlineCode,
+    );
+    expect(tree.children?.[0]?.children).toEqual([
+      ...(before ? [{ type: "Text", content: before }] : []),
+      {
+        type: "Link",
+        attributes: expect.objectContaining({ url }),
+        children: [{ type: "Text", content: url }],
+      },
+      { type: "Text", content: after },
+    ]);
+  });
+
   it.each(["[Authored](https://example.com/a.)", "<https://example.com/a.>"])(
     "preserves punctuation in explicit destinations: %s",
     async (source) => {
@@ -364,6 +389,17 @@ it("recognizes bare Unicode filenames and preserves inline-code URLs", () => {
     "说明.md",
   ]);
   expect(prepared.linkRecognition.inlineCode?.test("https://example.com")).toBe(true);
+});
+
+it.each([
+  ["詳細は「README.md を参照", "README.md"],
+  ["「README.md」を読んで", "README.md"],
+  ["（docs/qa.md）を参照", "docs/qa.md"],
+  ["See “README.md” first", "README.md"],
+  ["メモ.md を開く", "メモ.md"],
+])("starts and ends prose paths at Unicode punctuation: %s", (source, path) => {
+  const { linkRecognition } = prepareMarkdownSource(source);
+  expect([...source.matchAll(linkRecognition.text)].map(([text]) => text)).toEqual([path]);
 });
 
 it("keeps explicit and inline-code links distinct when their URL strings match", () => {

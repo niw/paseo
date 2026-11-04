@@ -10,9 +10,14 @@ import type { Link, Nodes, Paragraph, PhrasingContent, Root } from "mdast";
 
 // Keep this regex in the syntax shared by JavaScript, ICU and java.util.regex.
 // The Unicode flag makes Metro expand it to escapes rejected by native engines.
-const PATH_CHARACTER = String.raw`[a-zA-Z0-9\u0080-\uFFFF_@.%+-]`;
+// Latin-1, general, CJK and fullwidth punctuation blocks. Prose like 「README.md」 or
+// （https://example.com） puts them next to a path or URL without a space.
+const NON_ASCII_PUNCTUATION = String.raw`\u00A0-\u00BF\u2000-\u206F\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65`;
+// Non-ASCII filename characters, minus NON_ASCII_PUNCTUATION.
+const NON_ASCII_PATH_CHARACTER = String.raw`\u00C0-\u1FFF\u2070-\u2FFF\u3040-\uFEFF\uFF10-\uFF19\uFF21-\uFF3A\uFF41-\uFF5A\uFF66-\uFFFF`;
+const PATH_CHARACTER = String.raw`[a-zA-Z0-9${NON_ASCII_PATH_CHARACTER}_@.%+-]`;
 const PATH_LETTER = String.raw`[a-zA-Z]`;
-const PATH_SEGMENT = String.raw`${PATH_CHARACTER}*[a-zA-Z0-9\u0080-\uFFFF_@%+-]`;
+const PATH_SEGMENT = String.raw`${PATH_CHARACTER}*[a-zA-Z0-9${NON_ASCII_PATH_CHARACTER}_@%+-]`;
 const LINE_SUFFIX = String.raw`(?::\d+(?::\d+)?(?:-\d+(?::\d+)?)?)?`;
 const FILE_EXTENSIONS = [...ASSISTANT_FILE_EXTENSIONS]
   .map((extension) => extension.replace(/[a-z]/g, (letter) => `[${letter}${letter.toUpperCase()}]`))
@@ -27,16 +32,17 @@ const PROSE_PATH = String.raw`(?:${PATH_PREFIX}${HAS_PATH_LETTER}${SEPARATED_PAT
 function createFilePattern(path: string): RegExp {
   // The native adapter mistakes a literal + in lookbehind for a quantifier; use its hex escape.
   return new RegExp(
-    String.raw`(?:${BARE_URL}|(?<![a-zA-Z0-9\u0080-\uFFFF_@.%\x2b~:/\\-])(?:${path}|${FILE_NAME})${LINE_SUFFIX}(?![a-zA-Z0-9\u0080-\uFFFF_@%+:/\\-]|\.${PATH_CHARACTER}))`,
+    String.raw`(?:${BARE_URL}|(?<![a-zA-Z0-9${NON_ASCII_PATH_CHARACTER}_@.%\x2b~:/\\-])(?:${path}|${FILE_NAME})${LINE_SUFFIX}(?![a-zA-Z0-9${NON_ASCII_PATH_CHARACTER}_@%+:/\\-]|\.${PATH_CHARACTER}))`,
     "g",
   );
 }
 
 // Matches bare URLs that MD4C does not autolink, like single-label or bracketed hosts.
-// Quotes and unbalanced closing parentheses end the URL. Trailing sentence punctuation stays outside.
-const URL_CHARACTER = String.raw`[^\s<>()"'\x60]`;
+// Quotes, non-ASCII punctuation and unbalanced closing parentheses end the URL. Trailing sentence
+// punctuation stays outside.
+const URL_CHARACTER = String.raw`[^\s<>()"'\x60${NON_ASCII_PUNCTUATION}]`;
 const URL_GROUP = String.raw`\(${URL_CHARACTER}*\)`;
-const BARE_URL = String.raw`https?://(?:${URL_CHARACTER}|${URL_GROUP})*(?:[^\s<>()"'\x60.,;:!?]|${URL_GROUP})`;
+const BARE_URL = String.raw`https?://(?:${URL_CHARACTER}|${URL_GROUP})*(?:[^\s<>()"'\x60.,;:!?${NON_ASCII_PUNCTUATION}]|${URL_GROUP})`;
 
 const FILE_PATTERN = createFilePattern(PROSE_PATH);
 // A delimiter row's first cell, with or without its leading pipe.
