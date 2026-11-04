@@ -811,6 +811,36 @@ it.each([
   expect(linkRecognition.inlineCode.test(token)).toBe(false);
 });
 
+describe("CJK-friendly emphasis and strikethrough", () => {
+  const tags: Partial<Record<ASTNode["type"], string>> = {
+    Strong: "b",
+    Emphasis: "em",
+    Strikethrough: "s",
+  };
+  function inlineMarkup(node: ASTNode): string {
+    if (node.type === "Text") return node.content ?? "";
+    const children = (node.children ?? []).map(inlineMarkup).join("");
+    const tag = tags[node.type];
+    return tag ? `<${tag}>${children}</${tag}>` : children;
+  }
+
+  it.each([
+    ["**「太字」**です", "<b>「太字」</b>です"],
+    ["これは**「重要」**な話", "これは<b>「重要」</b>な話"],
+    ["**太字。**次の文", "<b>太字。</b>次の文"],
+    ["**丁寧（ていねい）**に", "<b>丁寧（ていねい）</b>に"],
+    ["*強調。*次", "<em>強調。</em>次"],
+    ["これは~~不要~~です", "これは<s>不要</s>です"],
+    ["~~「削除」~~します", "<s>「削除」</s>します"],
+    ["日本_語_です", "日本_語_です"],
+    ['a**"foo"**', 'a**"foo"**'],
+    ["foo~~bar~~baz", "foo<s>bar</s>baz"],
+    ["~~ foo ~~", "~~ foo ~~"],
+  ])("parses %s", async (source, markup) => {
+    expect(inlineMarkup(await parseMarkdown(source, { latexMath: false }))).toBe(markup);
+  });
+});
+
 it("keeps prose and inline-code recognition enabled through the native regex adapter", () => {
   const { linkRecognition } = prepareMarkdownSource("3/4 src/index.ts");
   const native = toNativeLinkRecognition(linkRecognition);
