@@ -24,7 +24,7 @@ The package keeps the npm tarball's layout, including its build output:
 
 - Metro, Vitest and TypeScript load `lib/`, not `src/`. A JavaScript change edits `src/` and the matching `lib/module` and `lib/typescript` files.
 - `android/generated` and `ios/generated` are checked-in codegen output (`includesGeneratedCode`). A change to a native component spec regenerates both; `scripts/postinstall-patches.test.mjs` compares them against the specs.
-- `src/web/wasm/md4c.js` and `lib/module/web/wasm/md4c.js` are an Emscripten build of `cpp/md4c`. A parser change rebuilds them with upstream's `packages/core/cpp/wasm/build.sh`.
+- For a `cpp/md4c` change, rebuild the web parser with the commands in `cpp/wasm/build.sh` and emsdk 4.0.10. Drop `GROWABLE_ARRAYBUFFERS` and add `-fmacro-prefix-map=<cpp root>=react-native-enriched-markdown/cpp` to keep local paths out of the binary. Replace the embedded base64 binary in `src/web/wasm/md4c.js`, `lib/module/web/wasm/md4c.js` and the latter file's source map.
 - Upstream's Gradle, CMake and CocoaPods scripts detect upstream's own monorepo by the paths `packages/core` and a root `vendor/`. Do not add either path to this repository.
 - `postinstall.mjs` downloads the tree-sitter grammars into the ignored `cpp/highlight/vendor/grammars` and `vendor/tree-sitter`. The `enriched-markdown` block in `packages/app/package.json` chooses the languages.
 
@@ -53,6 +53,8 @@ Selection copy has to tell links Paseo recognized in the text (paths, forge refe
 The fork also keeps overflowing native horizontal blocks in control of their drags: Android claims parent interception at touch-down and releases it for vertical drags so the chat list can scroll; iOS keeps its scroll recognizer active for outward drags at the leading edge. This prevents compact sidebar pans from taking block scrolling without changing sidebar swipes on prose or non-overflowing blocks. Native changes require a client rebuild.
 
 On iOS a newly mounted Markdown view paints empty for a frame or more after it is laid out at its measured height: the library parses even a view's first content on a background queue and applies it in a later main-queue turn. Expanding a turn in chat therefore shows its rows in place with the text arriving a frame later (165 ms when the mount keeps the main thread busy). Android paints the text in the first frame. Rendering a view's first content synchronously fixes the frame but costs frame time when a fling mounts history rows, so the app keeps the library's behavior until [enriched-markdown #1131](https://github.com/software-mansion/enriched-markdown/issues/1131) is resolved.
+
+The patched MD4C parses emphasis and strikethrough by the [markdown-cjk-friendly](https://github.com/tats-u/markdown-cjk-friendly/blob/main/specification.md) rules, so `**「太字」**です` and `これは~~不要~~です` render as marked. Its CJK table in `md4c.c` mirrors `micromark-extension-cjk-friendly-util`; regenerate it from `get-east-asian-width` when that package changes. Strikethrough uses GFM flanking rules: `foo~~bar~~baz` strikes and `~~ foo ~~` stays literal.
 
 Android measurements use a size-only, 512-entry LRU across view unmounts, matching the library’s existing iOS cache. Scrolling back through history can reuse layout sizes without parsing those rows again. Content, layout props and width identify each entry; font-scale changes and native layout invalidation discard affected sizes. The cache retains no views or spans.
 
