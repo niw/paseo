@@ -1016,6 +1016,158 @@ struct MD_UNICODE_FOLD_INFO_tag {
 #endif
 
 
+/* CJK-friendly emphasis and strikethrough delimiter classification.
+ * (https://github.com/tats-u/markdown-cjk-friendly/blob/main/specification.md) */
+#define MD_DELIM_CLASS_WHITESPACE           0x01
+#define MD_DELIM_CLASS_PUNCT                0x02
+#define MD_DELIM_CLASS_CJK                  0x04
+#define MD_DELIM_CLASS_IVS                  0x08
+#define MD_DELIM_CLASS_VS                   0x10
+
+#if defined MD4C_USE_UTF16 || defined MD4C_USE_UTF8
+    static int
+    md_is_unicode_cjk__(unsigned codepoint)
+    {
+#define R(cp_min, cp_max)   ((cp_min) | 0x40000000), ((cp_max) | 0x80000000)
+#define S(cp)               (cp)
+        /* East Asian Width F, H, and W without Emoji_Presentation, plus the Hangul
+         * script, from U+1100. Mirrors cjkOrIvs() of micromark-extension-cjk-friendly-util.
+         * (generated from get-east-asian-width 1.7.0 and Unicode 18.0) */
+        static const unsigned CJK_MAP[] = {
+            R(0x1100,0x11ff), S(0x20a9), R(0x2329,0x232a), R(0x2630,0x2637), R(0x268a,0x268f), R(0x2e80,0x2e99),
+            R(0x2e9b,0x2ef3), R(0x2f00,0x2fd5), R(0x2ff0,0x303e), R(0x3041,0x3096), R(0x3099,0x30ff),
+            R(0x3105,0x312f), R(0x3131,0x318e), R(0x3190,0x31e5), R(0x31ef,0x321e), R(0x3220,0x3247),
+            R(0x3250,0xa48c), R(0xa490,0xa4c6), R(0xa960,0xa97c), R(0xac00,0xd7a3), R(0xd7b0,0xd7c6),
+            R(0xd7cb,0xd7fb), R(0xf900,0xfaff), R(0xfe10,0xfe19), R(0xfe30,0xfe52), R(0xfe54,0xfe66),
+            R(0xfe68,0xfe6b), R(0xff01,0xffbe), R(0xffc2,0xffc7), R(0xffca,0xffcf), R(0xffd2,0xffd7),
+            R(0xffda,0xffdc), R(0xffe0,0xffe6), R(0xffe8,0xffee), R(0x16fe0,0x16fe4), R(0x16ff0,0x16ff6),
+            R(0x17000,0x18cda), R(0x18cff,0x18d20), R(0x18d80,0x18df2), R(0x18e00,0x19191), R(0x191a0,0x191d2),
+            R(0x1aff0,0x1aff3), R(0x1aff5,0x1affb), R(0x1affd,0x1affe), R(0x1b000,0x1b128), S(0x1b132),
+            R(0x1b150,0x1b152), S(0x1b155), R(0x1b164,0x1b168), R(0x1b170,0x1b2fb), R(0x1d300,0x1d356),
+            R(0x1d360,0x1d376), S(0x1f1ae), S(0x1f200), S(0x1f202), R(0x1f210,0x1f219), R(0x1f21b,0x1f22e),
+            R(0x1f230,0x1f231), S(0x1f237), S(0x1f23b), R(0x1f240,0x1f248), R(0x1f260,0x1f265), S(0x1f7da),
+            R(0x20000,0x2fffd), R(0x30000,0x3fffd)
+        };
+#undef R
+#undef S
+
+        if(codepoint < 0x1100)
+            return 0;
+
+        return (md_unicode_bsearch__(codepoint, CJK_MAP, SIZEOF_ARRAY(CJK_MAP)) >= 0);
+    }
+#else
+    #define md_is_unicode_cjk__(codepoint)  0
+    #define md_is_unicode_punct__(codepoint) ISPUNCT_(codepoint)
+#endif
+
+static OFF
+md_char_beg_before(MD_CTX* ctx, OFF off)
+{
+#if defined MD4C_USE_UTF8
+    OFF beg = off - 1;
+    while(beg > 0  &&  off - beg < 4  &&  IS_UTF8_TAIL(CH(beg)))
+        beg--;
+    return beg;
+#elif defined MD4C_USE_UTF16
+    if(off >= 2  &&  IS_UTF16_SURROGATE_LO(CH(off-1))  &&  IS_UTF16_SURROGATE_HI(CH(off-2)))
+        return off - 2;
+    return off - 1;
+#else
+    MD_UNUSED(ctx);
+    return off - 1;
+#endif
+}
+
+static unsigned
+md_delim_codepoint_at(MD_CTX* ctx, OFF off)
+{
+    SZ char_size;
+    return md_decode_unicode(ctx->text, off, ctx->size, &char_size);
+}
+
+static int
+md_delim_class(unsigned codepoint)
+{
+    int delim_class = 0;
+
+    if(ISNEWLINE_(codepoint)  ||  ISUNICODEWHITESPACE_(codepoint))
+        return MD_DELIM_CLASS_WHITESPACE;
+
+    if(codepoint >= 0x1100) {
+        if(codepoint >= 0xfe00  &&  codepoint <= 0xfe0e)
+            return MD_DELIM_CLASS_VS;
+        if(codepoint >= 0xe0100  &&  codepoint <= 0xe01ef)
+            return MD_DELIM_CLASS_IVS;
+        if(md_is_unicode_cjk__(codepoint))
+            delim_class |= MD_DELIM_CLASS_CJK;
+    }
+
+    if(md_is_unicode_punct__(codepoint))
+        delim_class |= MD_DELIM_CLASS_PUNCT;
+
+    return delim_class;
+}
+
+/* Classify the character before a delimiter run. A non-emoji variation selector
+ * takes the class of the character it modifies. Curly quotes with U+FE01 are
+ * fullwidth, so they count as CJK punctuation. */
+static int
+md_delim_class_before(MD_CTX* ctx, OFF off, OFF line_beg)
+{
+    OFF beg, main_beg;
+    unsigned codepoint, main_codepoint;
+    int delim_class, main_class;
+
+    if(off <= line_beg)
+        return MD_DELIM_CLASS_WHITESPACE;
+
+    beg = md_char_beg_before(ctx, off);
+    codepoint = md_delim_codepoint_at(ctx, beg);
+    delim_class = md_delim_class(codepoint);
+    if(delim_class != MD_DELIM_CLASS_VS  ||  beg <= line_beg)
+        return delim_class;
+
+    main_beg = md_char_beg_before(ctx, beg);
+    main_codepoint = md_delim_codepoint_at(ctx, main_beg);
+    main_class = md_delim_class(main_codepoint);
+    if(main_class & MD_DELIM_CLASS_WHITESPACE)
+        return delim_class;
+    if(codepoint == 0xfe01  &&  (main_codepoint == 0x2018  ||  main_codepoint == 0x2019  ||
+                                 main_codepoint == 0x201c  ||  main_codepoint == 0x201d))
+        return MD_DELIM_CLASS_CJK | MD_DELIM_CLASS_PUNCT;
+    return main_class & ~MD_DELIM_CLASS_IVS;
+}
+
+static int
+md_delim_class_after(MD_CTX* ctx, OFF off, OFF line_end)
+{
+    if(off >= line_end)
+        return MD_DELIM_CLASS_WHITESPACE;
+    return md_delim_class(md_delim_codepoint_at(ctx, off));
+}
+
+#define MD_DELIM_IS_NON_CJK_PUNCT(delim_class)                                  \
+    (((delim_class) & (MD_DELIM_CLASS_PUNCT | MD_DELIM_CLASS_CJK)) == MD_DELIM_CLASS_PUNCT)
+#define MD_DELIM_IS_SPACE_OR_NON_CJK_PUNCT(delim_class)                         \
+    (((delim_class) & MD_DELIM_CLASS_WHITESPACE)  ||  MD_DELIM_IS_NON_CJK_PUNCT(delim_class))
+
+/* Left-flanking and right-flanking delimiter runs with the CJK-friendly amendments. */
+static void
+md_delim_flanking(int before, int after, int* p_left_flanking, int* p_right_flanking)
+{
+    int before_space_or_punct = MD_DELIM_IS_SPACE_OR_NON_CJK_PUNCT(before);
+    int after_space_or_punct = MD_DELIM_IS_SPACE_OR_NON_CJK_PUNCT(after);
+
+    *p_left_flanking = !after_space_or_punct  ||
+        (MD_DELIM_IS_NON_CJK_PUNCT(after)  &&
+         (before_space_or_punct  ||  (before & (MD_DELIM_CLASS_CJK | MD_DELIM_CLASS_IVS))));
+    *p_right_flanking = !before_space_or_punct  ||
+        (MD_DELIM_IS_NON_CJK_PUNCT(before)  &&
+         (after_space_or_punct  ||  (after & MD_DELIM_CLASS_CJK)));
+}
+
+
 /*************************************
  ***  Helper string manipulations  ***
  *************************************/
@@ -3288,38 +3440,32 @@ md_collect_marks(MD_CTX* ctx, const MD_LINE* lines, MD_SIZE n_lines, int table_m
             /* A potential (string) emphasis start/end. */
             if(ch == _T('*')  ||  ch == _T('_')) {
                 OFF tmp = off+1;
-                int left_level;     /* What precedes: 0 = whitespace; 1 = punctuation; 2 = other char. */
-                int right_level;    /* What follows: 0 = whitespace; 1 = punctuation; 2 = other char. */
+                int before, after;
+                int can_open, can_close;
 
                 while(tmp < line->end  &&  CH(tmp) == ch)
                     tmp++;
 
-                if(off == line->beg  ||  ISUNICODEWHITESPACEBEFORE(off))
-                    left_level = 0;
-                else if(ISUNICODEPUNCTBEFORE(off))
-                    left_level = 1;
-                else
-                    left_level = 2;
+                before = md_delim_class_before(ctx, off, line->beg);
+                after = md_delim_class_after(ctx, tmp, line->end);
+                md_delim_flanking(before, after, &can_open, &can_close);
 
-                if(tmp == line->end  ||  ISUNICODEWHITESPACE(tmp))
-                    right_level = 0;
-                else if(ISUNICODEPUNCT(tmp))
-                    right_level = 1;
-                else
-                    right_level = 2;
-
-                /* Intra-word underscore doesn't have special meaning. */
-                if(ch == _T('_')  &&  left_level == 2  &&  right_level == 2) {
-                    left_level = 0;
-                    right_level = 0;
+                /* Underscore needs punctuation (CJK included) on the outer side
+                 * when the run is both left- and right-flanking. This also makes
+                 * intra-word underscores literal. */
+                if(ch == _T('_')) {
+                    int open = can_open  &&  ((before & (MD_DELIM_CLASS_WHITESPACE | MD_DELIM_CLASS_PUNCT))  ||  !can_close);
+                    int close = can_close  &&  ((after & (MD_DELIM_CLASS_WHITESPACE | MD_DELIM_CLASS_PUNCT))  ||  !can_open);
+                    can_open = open;
+                    can_close = close;
                 }
 
-                if(left_level != 0  ||  right_level != 0) {
+                if(can_open  ||  can_close) {
                     unsigned flags = 0;
 
-                    if(left_level > 0  &&  left_level >= right_level)
+                    if(can_close)
                         flags |= MD_MARK_POTENTIAL_CLOSER;
-                    if(right_level > 0  &&  right_level >= left_level)
+                    if(can_open)
                         flags |= MD_MARK_POTENTIAL_OPENER;
                     if(flags == (MD_MARK_POTENTIAL_OPENER | MD_MARK_POTENTIAL_CLOSER))
                         flags |= MD_MARK_EMPH_OC;
@@ -3639,13 +3785,17 @@ md_collect_marks(MD_CTX* ctx, const MD_LINE* lines, MD_SIZE n_lines, int table_m
                     if(flags != 0)
                         ADD_MARK(ch, off, off + 1, flags);
                 } else if(tmp - off <= 2  &&  (ctx->parser.flags & MD_FLAG_STRIKETHROUGH)) {
-                    /* Strikethrough: standard GFM left/right-flanking rules. */
-                    unsigned flags = MD_MARK_POTENTIAL_OPENER | MD_MARK_POTENTIAL_CLOSER;
+                    /* Strikethrough: GFM left/right-flanking rules with the CJK-friendly amendments. */
+                    unsigned flags = 0;
+                    int can_open, can_close;
 
-                    if(off > line->beg  &&  !ISUNICODEWHITESPACEBEFORE(off)  &&  !ISUNICODEPUNCTBEFORE(off))
-                        flags &= ~MD_MARK_POTENTIAL_OPENER;
-                    if(tmp < line->end  &&  !ISUNICODEWHITESPACE(tmp)  &&  !ISUNICODEPUNCT(tmp))
-                        flags &= ~MD_MARK_POTENTIAL_CLOSER;
+                    md_delim_flanking(md_delim_class_before(ctx, off, line->beg),
+                                      md_delim_class_after(ctx, tmp, line->end),
+                                      &can_open, &can_close);
+                    if(can_open)
+                        flags |= MD_MARK_POTENTIAL_OPENER;
+                    if(can_close)
+                        flags |= MD_MARK_POTENTIAL_CLOSER;
                     if(flags != 0)
                         ADD_MARK(ch, off, tmp, flags);
                 }
