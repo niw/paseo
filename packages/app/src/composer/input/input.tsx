@@ -792,6 +792,10 @@ function VoiceButtonTooltip({
   );
 }
 
+// The visible button is 28pt; this grows the touch target toward 44pt. The left side stays
+// smaller so it does not take taps meant for the voice button beside it.
+const SEND_BUTTON_HIT_SLOP = { top: 8, bottom: 8, left: 4, right: 8 } as const;
+
 function SendButtonTooltip({
   shouldShow,
   canPressLoadingButton,
@@ -839,6 +843,7 @@ function SendButtonTooltip({
         accessibilityRole="button"
         testID={submitButtonTestID}
         style={sendButtonCombinedStyle}
+        hitSlop={SEND_BUTTON_HIT_SLOP}
       >
         <SendButtonContent
           isSubmitLoading={isSubmitLoading}
