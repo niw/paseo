@@ -286,6 +286,8 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement 
     />
   );
 
+  // Badges shrink when the row is narrow; every picker sets its own floor so its popover does
+  // not shrink with the badge that opened it.
   const pickers = (
     <>
       <Combobox
@@ -312,6 +314,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement 
         open={isolation.openState}
         onOpenChange={isolation.onOpenChange}
         desktopPlacement="bottom-start"
+        desktopMinWidth={200}
         anchorRef={isolation.anchorRef}
         renderOption={isolationPicker.renderOption}
       />
@@ -326,6 +329,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement 
         onOpenChange={base.onOpenChange}
         onSearchQueryChange={base.setSearchQuery}
         desktopPlacement="bottom-start"
+        desktopMinWidth={360}
         anchorRef={base.anchorRef}
         emptyText={base.emptyText}
         renderOption={renderRefOption}
