@@ -24,6 +24,10 @@ function buildWidthStyle(input: {
   };
 }
 
+function flattenFrameStyle(style: ReturnType<typeof buildDesktopFrameStyle>): ViewStyle {
+  return Object.assign({}, ...(style as (ViewStyle | null)[]).filter(Boolean));
+}
+
 describe("buildDesktopFrameStyle", () => {
   it("lets a narrow trigger grow to the default desktop ceiling", () => {
     expect(buildWidthStyle({ referenceWidth: 120 })).toEqual({
@@ -69,5 +73,37 @@ describe("buildDesktopFrameStyle", () => {
     }) as ViewStyle[];
 
     expect(frameStyle).toMatchObject({ width: 360, minWidth: 360, maxWidth: 360 });
+  });
+
+  it("shrinks a fixed height to the room available beside the anchor", () => {
+    const style = flattenFrameStyle(
+      buildDesktopFrameStyle({
+        desktopMinWidth: 360,
+        desktopLockWidth: true,
+        referenceWidth: 120,
+        desktopFixedHeight: 400,
+        desktopPositionStyle: { left: 0, top: 0 },
+        shouldHideDesktopContent: false,
+        availableHeight: 250,
+      }),
+    );
+
+    expect(style).toMatchObject({ minHeight: 250, maxHeight: 250 });
+  });
+
+  it("keeps a fixed height when the anchor has room for it", () => {
+    const style = flattenFrameStyle(
+      buildDesktopFrameStyle({
+        desktopMinWidth: 360,
+        desktopLockWidth: true,
+        referenceWidth: 120,
+        desktopFixedHeight: 300,
+        desktopPositionStyle: { left: 0, top: 0 },
+        shouldHideDesktopContent: false,
+        availableHeight: 600,
+      }),
+    );
+
+    expect(style).toMatchObject({ minHeight: 300, maxHeight: 300 });
   });
 });
