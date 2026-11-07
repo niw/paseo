@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTopChromeInsets } from "@/components/safe-area-edges";
 import { Gesture } from "react-native-gesture-handler";
 import { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { HEADER_TOP_PADDING_MOBILE } from "@/constants/layout";
+import { HEADER_TOP_PADDING_MOBILE, WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import {
   SIDEBAR_RESIZE_ACTIVATION_OFFSET,
@@ -19,6 +20,9 @@ export function useExplorerGeometry({
   onResize,
 }: ExplorerGeometryInput): ExplorerGeometry {
   const insets = useSafeAreaInsets();
+  // The panel's top row is its tab row: it shares a shareable top band.
+  const overlayTopPadding = overlay ? HEADER_TOP_PADDING_MOBILE : 0;
+  const topChrome = useTopChromeInsets(WORKSPACE_SECONDARY_HEADER_HEIGHT + overlayTopPadding);
   const resizeWidth = useSharedValue(width);
   const startWidth = useSharedValue(width);
   const [resizePressed, setResizePressed] = useState(false);
@@ -61,18 +65,18 @@ export function useExplorerGeometry({
   );
   // Reanimated retains the last animated value when its style is removed. Keep this
   // style attached across folding and explicitly size overlays to the workspace viewport.
+  // The docked panel grows by the right edge's inset so its content keeps its width.
+  const dockInsetRight = insets.right;
   const animatedWidthStyle = useAnimatedStyle(
     () => ({
-      width: overlay ? containerWidth : resizeWidth.value,
+      width: overlay ? containerWidth : resizeWidth.value + dockInsetRight,
     }),
-    [containerWidth, overlay],
+    [containerWidth, dockInsetRight, overlay],
   );
   return {
     frameStyle: animatedWidthStyle,
     panelStyle: {
-      paddingTop: insets.top + (overlay ? HEADER_TOP_PADDING_MOBILE : 0),
-      paddingLeft: overlay ? insets.left : 0,
-      paddingRight: overlay ? insets.right : 0,
+      paddingTop: topChrome.paddingTop + overlayTopPadding,
     },
     resizeHandle: (
       <SidebarResizeHandle

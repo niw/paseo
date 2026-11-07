@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useFullBleedStyle } from "@/components/padded-side-insets";
 import { View, StyleSheet } from "react-native";
 import { KEYBOARD_STATUS, useBottomSheetInternal } from "@gorhom/bottom-sheet";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
@@ -28,8 +29,10 @@ export function SheetVisibleFrame({
       }),
     };
   }, [animatedDetentsState, animatedKeyboardState, animatedLayoutState, animatedPosition]);
+  // The frame clips to the sheet's full width, so a full-bleed surface inside can reach the edges.
+  const fullBleedStyle = useFullBleedStyle();
   return (
-    <Animated.View style={[styles.frame, visibleStyle]}>
+    <Animated.View style={[styles.frame, fullBleedStyle, visibleStyle]}>
       <View style={styles.body}>{children}</View>
       {footer}
     </Animated.View>

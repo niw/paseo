@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePaddedSideInsets } from "@/components/padded-side-insets";
 import type { ComponentProps, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -18,14 +19,23 @@ import {
   type BottomSheetBackgroundProps,
 } from "@gorhom/bottom-sheet";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated from "react-native-reanimated";
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { ArrowLeft, Search, X, type LucideIcon } from "lucide-react-native";
 import {
   IsolatedBottomSheetModal,
+  type IsolatedBottomSheetModalRef,
+  SheetFullBleedRegion,
   SheetVisibleFrame,
   type ContextBridge,
   useIsolatedBottomSheetVisibility,
 } from "@/components/ui/isolated-bottom-sheet-modal";
+import { SPACING } from "@/styles/theme";
 import { getCompactSheetSafeAreaPadding } from "@/components/adaptive-modal-sheet-layout";
 import { ScrollView } from "@/components/ui/scroll-view";
 import { isWeb } from "@/constants/platform";
@@ -236,6 +246,50 @@ const styles = StyleSheet.create((theme) => ({
 }));
 
 const WEB_EXIT_DURATION_MS = 160;
+const NATIVE_DIALOG_FADE_DURATION_MS = 160;
+const INSTANT_SHEET_ANIMATION = { duration: 0 };
+const NATIVE_DIALOG_LAYER_STYLE = { flex: 1 };
+
+/**
+ * A native dialog rides a bottom sheet so it joins the app's modal stack, but it should fade in
+ * and out like the web dialog, not slide like a sheet. The sheet moves instantly; the dialog fades
+ * in once it is presented and fades out before it is dismissed. Pass `dialogRef` as the sheet's
+ * ref, `animationConfigs` to the sheet and `style` to the dialog's layer.
+ */
+function useFadingDialogSheet(sheetRef: (instance: IsolatedBottomSheetModalRef | null) => void) {
+  const opacity = useSharedValue(0);
+  const dialogRef = useCallback(
+    (instance: IsolatedBottomSheetModalRef | null) => {
+      if (!instance) {
+        sheetRef(null);
+        return;
+      }
+      const dismissNow = () => instance.dismiss();
+      sheetRef({
+        ...instance,
+        present: (...args) => {
+          cancelAnimation(opacity);
+          opacity.value = 0;
+          instance.present(...args);
+          opacity.value = withTiming(1, { duration: NATIVE_DIALOG_FADE_DURATION_MS });
+        },
+        // Reopening before the fade ends cancels it, and the dialog stays.
+        dismiss: () => {
+          opacity.value = withTiming(
+            0,
+            { duration: NATIVE_DIALOG_FADE_DURATION_MS },
+            (finished) => {
+              if (finished) scheduleOnRN(dismissNow);
+            },
+          );
+        },
+      });
+    },
+    [opacity, sheetRef],
+  );
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return { dialogRef, style, animationConfigs: INSTANT_SHEET_ANIMATION };
+}
 const WEB_ENTER_DURATION_MS = 160;
 const WEB_ENTER_ANIMATION_NAME = "paseo-modal-enter";
 
@@ -394,6 +448,20 @@ export function SheetHeaderView({
     () => [styles.title, { color: theme.colors.foreground }],
     [theme.colors.foreground],
   );
+  // The header's rules reach the sheet's edges past its side insets; its controls stay inside.
+  const sheetInsets = usePaddedSideInsets();
+  const headerContainerStyle = useMemo(
+    () => [
+      styles.headerContainer,
+      {
+        marginLeft: -sheetInsets.left,
+        marginRight: -sheetInsets.right,
+        paddingLeft: sheetInsets.left,
+        paddingRight: sheetInsets.right,
+      },
+    ],
+    [sheetInsets.left, sheetInsets.right],
+  );
   const back = header.back;
   const handleBackPress = back?.onPress;
   const search = header.search;
@@ -405,7 +473,7 @@ export function SheetHeaderView({
   );
 
   return (
-    <View style={styles.headerContainer} testID={testID}>
+    <View style={headerContainerStyle} testID={testID}>
       <View style={styles.headerRow}>
         {handleBackPress ? (
           <Pressable
@@ -465,6 +533,20 @@ export function SheetHeaderView({
 export function InlineHeaderView({ header }: { header: SheetHeader }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  // The search row's rule reaches the sheet's edges past its side insets.
+  const sheetInsets = usePaddedSideInsets();
+  const searchRowStyle = useMemo(
+    () => [
+      styles.inlineSearchRow,
+      {
+        marginLeft: -sheetInsets.left,
+        marginRight: -sheetInsets.right,
+        paddingLeft: theme.spacing[3] + sheetInsets.left,
+        paddingRight: theme.spacing[3] + sheetInsets.right,
+      },
+    ],
+    [sheetInsets.left, sheetInsets.right, theme.spacing],
+  );
   const back = header.back;
   const handleBackPress = back?.onPress;
   const hasInlineRow = Boolean(handleBackPress || header.leading || header.actions);
@@ -500,7 +582,7 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
         </View>
       ) : null}
       {header.search ? (
-        <View style={styles.inlineSearchRow}>
+        <View style={searchRowStyle}>
           <Search size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
           <AdaptiveTextInput
             // @ts-expect-error - outlineStyle is web-only
@@ -532,7 +614,22 @@ export function SheetFooter({
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
-  return <View style={[styles.footer, style]}>{children}</View>;
+  // The top border reaches the sheet's edges past its side insets; the actions stay inside.
+  const sheetInsets = usePaddedSideInsets();
+  const footerStyle = useMemo(
+    () => [
+      styles.footer,
+      {
+        marginLeft: -sheetInsets.left,
+        marginRight: -sheetInsets.right,
+        paddingLeft: SPACING[SHEET_HORIZONTAL_PADDING_SCALE] + sheetInsets.left,
+        paddingRight: SPACING[SHEET_HORIZONTAL_PADDING_SCALE] + sheetInsets.right,
+      },
+      style,
+    ],
+    [sheetInsets.left, sheetInsets.right, style],
+  );
+  return <View style={footerStyle}>{children}</View>;
 }
 
 export interface AdaptiveModalSheetProps {
@@ -675,6 +772,12 @@ export function AdaptiveModalSheet({
     isEnabled: isMobile || !isWeb,
     onClose,
   });
+  const fadingDialog = useFadingDialogSheet(sheetRef);
+  // A plain style: Reanimated owns this view's opacity, so no Unistyles style lands on it.
+  const nativeDialogLayerStyle = useMemo(
+    () => [NATIVE_DIALOG_LAYER_STYLE, fadingDialog.style],
+    [fadingDialog.style],
+  );
   const [shouldRenderWeb, setShouldRenderWeb] = useState(visible);
   const [isWebClosing, setIsWebClosing] = useState(false);
   const modalLayer = useGlobalWebOverlayLayer("modal", isWeb && !isMobile && shouldRenderWeb);
@@ -807,7 +910,7 @@ export function AdaptiveModalSheet({
   );
 
   const desktopContent = (
-    <View style={desktopOverlayStyle} testID={testID}>
+    <DialogOverlay style={desktopOverlayStyle} testID={testID}>
       <Pressable
         accessibilityLabel={t("common.actions.dismiss")}
         style={ABSOLUTE_FILL_STYLE}
@@ -822,7 +925,7 @@ export function AdaptiveModalSheet({
       >
         {cardInner}
       </View>
-    </View>
+    </DialogOverlay>
   );
 
   // On web, use portal to overlay root for consistent stacking with toasts
@@ -836,7 +939,8 @@ export function AdaptiveModalSheet({
     // present from their React ancestor's controller, so a root-owned sibling dialog
     // cannot present while that controller already has a dialog open on iOS.
     <IsolatedBottomSheetModal
-      ref={sheetRef}
+      ref={fadingDialog.dialogRef}
+      animationConfigs={fadingDialog.animationConfigs}
       contextBridge={contextBridge}
       snapPoints={NATIVE_DIALOG_SNAP_POINTS}
       index={0}
@@ -853,7 +957,40 @@ export function AdaptiveModalSheet({
       accessible={false}
       presentation={presentation}
     >
-      <View style={styles.nativeDialogSurface}>{desktopContent}</View>
+      {/* The dialog's dimming reaches the sheet's edges, under the side insets. */}
+      <SheetFullBleedRegion style={styles.nativeDialogSurface}>
+        <Animated.View style={nativeDialogLayerStyle}>{desktopContent}</Animated.View>
+      </SheetFullBleedRegion>
     </IsolatedBottomSheetModal>
+  );
+}
+
+/**
+ * The dimmed layer behind a dialog card. It covers the whole window, side insets included, and
+ * keeps the card inside them. On native it renders at the sheet host, where the insets are read.
+ */
+function DialogOverlay({
+  style,
+  testID,
+  children,
+}: {
+  style: StyleProp<ViewStyle>;
+  testID?: string;
+  children: ReactNode;
+}) {
+  const { left, right } = useSafeAreaInsets();
+  const overlayStyle = useMemo(
+    () => [
+      style,
+      left > 0 || right > 0
+        ? { paddingLeft: SPACING[6] + left, paddingRight: SPACING[6] + right }
+        : null,
+    ],
+    [left, right, style],
+  );
+  return (
+    <View style={overlayStyle} testID={testID}>
+      {children}
+    </View>
   );
 }

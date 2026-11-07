@@ -13,6 +13,7 @@ import { FileChangeIcon } from "@/components/file-change-icon";
 import { MaterialFileIcon } from "@/components/material-file-icon";
 import {
   treeRowPaddingLeft,
+  useTreeRowInsets,
   workspaceTreeRowStyles,
   WORKSPACE_PANE_TRAILING_GLYPH_RAIL,
   WORKSPACE_FILE_ROW_VERTICAL_PADDING,
@@ -217,14 +218,22 @@ export const FileHeader = memo(function FileHeader({
       [file.path, onHeaderHeightChange],
     ),
   });
+  // In a list that reaches a side inset, a tree row's background does too; its content stays
+  // inside.
+  const rowInsets = useTreeRowInsets();
   const pressableStyle = useCallback(
     ({ pressed }: PressableStateCallbackType) => [
       styles.header,
       !showsBodyState && workspaceTreeRowStyles.row,
       showsBodyState && styles.documentHeader,
-      depth > 0
+      depth > 0 || rowInsets.left > 0
         ? inlineUnistylesStyle({
-            paddingLeft: treeRowPaddingLeft(depth),
+            paddingLeft: treeRowPaddingLeft(depth) + rowInsets.left,
+          })
+        : null,
+      rowInsets.right > 0
+        ? inlineUnistylesStyle({
+            paddingRight: WORKSPACE_PANE_TRAILING_GLYPH_RAIL + rowInsets.right,
           })
         : null,
       fileHeaderInteractionStyle({
@@ -234,7 +243,7 @@ export const FileHeader = memo(function FileHeader({
         isSelected,
       }),
     ],
-    [depth, hover.isHovered, isSelected, showsBodyState],
+    [depth, hover.isHovered, isSelected, rowInsets, showsBodyState],
   );
   const canvasPressableStyle = useCallback(
     (state: PressableStateCallbackType) => [

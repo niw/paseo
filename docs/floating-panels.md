@@ -412,6 +412,8 @@ Wrapping providers _around_ the modal does nothing. They land on the wrong side.
 
 ## Gotcha 8 — Read safe-area insets where the overlay draws
 
+Regions narrow the insets for their subtree; see [safe-area.md](safe-area.md).
+
 A compact sheet tab's body (`SheetBottomInset` in `adaptive-modal-sheet.tsx`) pads the bottom
 inset and gives its content a bottom inset of 0, so the composer dock sits the same in a sheet as
 in a tab. An overlay opened from that content and calling `useSafeAreaInsets()` at its call site

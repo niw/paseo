@@ -232,4 +232,9 @@ export type DiffSurfaceProps = DiffDocumentProps & {
   onToggleFile: (path: string) => void;
   selectedPath: string | null;
   onSelectPath: (path: string) => void;
+  /**
+   * Side insets the document runs under. The file headers keep their name, stats and icon inside
+   * them; the code still reaches the edges.
+   */
+  headerInsets: { left: number; right: number };
 };

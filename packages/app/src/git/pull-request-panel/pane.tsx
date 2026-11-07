@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { RegionPaddedView, useEdgeBleedStyle } from "@/components/padded-side-insets";
 import { Image, Pressable, ScrollView, Text, View, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
@@ -42,7 +43,7 @@ import {
   paneContentToolbarIconSize,
   paneContentToolbarIconButtonStyle,
 } from "@/components/ui/pane-content-toolbar";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
 import { getForgePresentation } from "@/git/forge";
 import { CLIENT_FORGE_VIEW_MODULES } from "@/git/forges/view";
 import type { PaneNativeContribution } from "@/git/client-forge-module";
@@ -477,10 +478,47 @@ export function PullRequestPane({
       })
     : null;
 
+  const header = (
+    <Pressable onPress={handleOpenPrUrl} style={styles.header}>
+      {({ hovered }) => (
+        <>
+          <Text style={styles.title} testID="pr-pane-title">
+            {data.title}
+            <Text style={styles.titleNumber}>
+              {" "}
+              {forgePresentation.numberPrefix}
+              {data.number}
+            </Text>
+          </Text>
+          <View style={styles.metaLine}>
+            <StateIcon size={14} uniProps={statePresentation.iconColor} />
+            <Text style={stateLabelStyle(data.state)} testID="pr-pane-state">
+              {t(getStateLabelKey(data.state))}
+            </Text>
+            {nativeHeaderMeta}
+            {repoIdentity ? (
+              <Text style={styles.repoRef} numberOfLines={1}>
+                {repoIdentity}
+              </Text>
+            ) : null}
+            <View style={hovered ? styles.headerLinkIcon : styles.headerLinkIconHidden}>
+              <ThemedExternalLink size={12} uniProps={foregroundMutedColorMapping} />
+            </View>
+          </View>
+        </>
+      )}
+    </Pressable>
+  );
+
   return (
     <View style={styles.root} testID="pr-pane">
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        <PaneContentToolbar style={styles.toolbar} testID="pr-pane-toolbar">
+        <PaneContentToolbar
+          style={styles.toolbar}
+          paddingLeft={SPACING[3]}
+          paddingRight={SPACING[3]}
+          testID="pr-pane-toolbar"
+        >
           <View style={styles.toolbarActions}>
             <Button
               variant="ghost"
@@ -524,101 +562,84 @@ export function PullRequestPane({
           ) : null}
         </PaneContentToolbar>
 
-        <Pressable onPress={handleOpenPrUrl} style={styles.header}>
-          {({ hovered }) => (
-            <>
-              <Text style={styles.title} testID="pr-pane-title">
-                {data.title}
-                <Text style={styles.titleNumber}>
-                  {" "}
-                  {forgePresentation.numberPrefix}
-                  {data.number}
-                </Text>
-              </Text>
-              <View style={styles.metaLine}>
-                <StateIcon size={14} uniProps={statePresentation.iconColor} />
-                <Text style={stateLabelStyle(data.state)} testID="pr-pane-state">
-                  {t(getStateLabelKey(data.state))}
-                </Text>
-                {nativeHeaderMeta}
-                {repoIdentity ? (
-                  <Text style={styles.repoRef} numberOfLines={1}>
-                    {repoIdentity}
-                  </Text>
-                ) : null}
-                <View style={hovered ? styles.headerLinkIcon : styles.headerLinkIconHidden}>
-                  <ThemedExternalLink size={12} uniProps={foregroundMutedColorMapping} />
-                </View>
-              </View>
-            </>
+        {/* The toolbar and the dividers run under the side insets; the rest stays inside them. */}
+        <RegionPaddedView>
+          {header}
+
+          {nativeChecksSection ?? (
+            <ChecksSection
+              checks={data.checks}
+              open={checksOpen}
+              onToggle={handleToggleChecks}
+              attachEnabled={attachEnabled}
+              loadingCheckKeys={loadingCheckKeys}
+              onAddLogsToChat={handleAddCheckLogsToChat}
+            />
           )}
-        </Pressable>
 
-        {nativeChecksSection ?? (
-          <ChecksSection
-            checks={data.checks}
-            open={checksOpen}
-            onToggle={handleToggleChecks}
-            attachEnabled={attachEnabled}
-            loadingCheckKeys={loadingCheckKeys}
-            onAddLogsToChat={handleAddCheckLogsToChat}
-          />
-        )}
+          <PaneDivider />
 
-        <View style={styles.divider} />
-
-        <Section
-          title={t("workspace.git.pr.sections.activity")}
-          open={activityOpen}
-          onToggle={handleToggleActivity}
-          summary={
-            <>
-              <SummaryPill count={approvals} icon={SUMMARY_APPROVAL_ICON} variant="success" />
-              <SummaryPill
-                count={changesRequested}
-                icon={SUMMARY_CHANGES_REQUESTED_ICON}
-                variant="danger"
-              />
-              <SummaryPill count={commentCount} icon={SUMMARY_COMMENT_ICON} variant="muted" />
-            </>
-          }
-        >
-          {timelineEntries.length > 0 && attachEnabled && visibleEntries.length > 0 ? (
-            <View style={styles.activityToolbar}>
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={MessageSquarePlus}
-                onPress={handleAddAllToChat}
-                disabled={activityLoading}
-              >
-                {t("workspace.git.pr.actions.addAllToChat")}
-              </Button>
-            </View>
-          ) : null}
-          {activityLoading ? <PrActivitySkeleton /> : null}
-          {!activityLoading && visibleEntries.length === 0 ? (
-            <Text style={sectionKitStyles.emptyText}>{t("workspace.git.pr.empty.noActivity")}</Text>
-          ) : null}
-          {!activityLoading
-            ? visibleEntries.map(({ entry, collapsed }) => (
-                <TimelineEntryCard
-                  key={entry.id}
-                  entry={entry}
-                  collapsed={collapsed}
-                  collapsedEntryIds={collapsedEntryIds}
-                  attachEnabled={attachEnabled}
-                  brandLabel={forgePresentation.brandLabel}
-                  onAddToChat={handleAddActivityToChat}
-                  onAddThreadToChat={handleAddThreadToChat}
-                  onToggleCollapsed={handleToggleEntryCollapsed}
+          <Section
+            title={t("workspace.git.pr.sections.activity")}
+            open={activityOpen}
+            onToggle={handleToggleActivity}
+            summary={
+              <>
+                <SummaryPill count={approvals} icon={SUMMARY_APPROVAL_ICON} variant="success" />
+                <SummaryPill
+                  count={changesRequested}
+                  icon={SUMMARY_CHANGES_REQUESTED_ICON}
+                  variant="danger"
                 />
-              ))
-            : null}
-        </Section>
+                <SummaryPill count={commentCount} icon={SUMMARY_COMMENT_ICON} variant="muted" />
+              </>
+            }
+          >
+            {timelineEntries.length > 0 && attachEnabled && visibleEntries.length > 0 ? (
+              <View style={styles.activityToolbar}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={MessageSquarePlus}
+                  onPress={handleAddAllToChat}
+                  disabled={activityLoading}
+                >
+                  {t("workspace.git.pr.actions.addAllToChat")}
+                </Button>
+              </View>
+            ) : null}
+            {activityLoading ? <PrActivitySkeleton /> : null}
+            {!activityLoading && visibleEntries.length === 0 ? (
+              <Text style={sectionKitStyles.emptyText}>
+                {t("workspace.git.pr.empty.noActivity")}
+              </Text>
+            ) : null}
+            {!activityLoading
+              ? visibleEntries.map(({ entry, collapsed }) => (
+                  <TimelineEntryCard
+                    key={entry.id}
+                    entry={entry}
+                    collapsed={collapsed}
+                    collapsedEntryIds={collapsedEntryIds}
+                    attachEnabled={attachEnabled}
+                    brandLabel={forgePresentation.brandLabel}
+                    onAddToChat={handleAddActivityToChat}
+                    onAddThreadToChat={handleAddThreadToChat}
+                    onToggleCollapsed={handleToggleEntryCollapsed}
+                  />
+                ))
+              : null}
+          </Section>
+        </RegionPaddedView>
       </ScrollView>
     </View>
   );
+}
+
+function PaneDivider() {
+  const edgeBleedStyle = useEdgeBleedStyle();
+  const style = useMemo(() => [styles.divider, edgeBleedStyle], [edgeBleedStyle]);
+  return <View style={style} />;
 }
 
 function stateLabelStyle(state: PrState) {
@@ -1269,8 +1290,6 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingRight: theme.spacing[3],
-    paddingLeft: theme.spacing[3],
   },
   toolbarActions: {
     flexDirection: "row",

@@ -87,6 +87,8 @@ export function createNativePaints(palette: DiffPalette): NativePaints {
 export function recordNativeHeaderPicture(input: {
   file: DiffFileSection;
   viewportWidth: number;
+  /** Side insets the header's content stays inside; its background and border reach the edges. */
+  insets: { left: number; right: number };
   textLayout: NativeHeaderTextLayout;
   paints: NativePaints;
 }): SkPicture {
@@ -98,7 +100,9 @@ export function recordNativeHeaderPicture(input: {
     Skia.XYWHRect(0, DIFF_FILE_HEADER_HEIGHT - 1, input.viewportWidth, 1),
     input.paints.headerBorder,
   );
-  const iconX = input.viewportWidth - DIFF_FILE_HEADER_RIGHT - DIFF_FILE_HEADER_ICON_SIZE;
+  const iconX =
+    input.viewportWidth - input.insets.right - DIFF_FILE_HEADER_RIGHT - DIFF_FILE_HEADER_ICON_SIZE;
+  const contentLeft = input.insets.left + DIFF_FILE_HEADER_LEFT;
   const additions = `+${formatDiffCount(input.file.file.additions)}`;
   const deletions = `-${formatDiffCount(input.file.file.deletions)}`;
   const additionsText = shapeNativeHeaderText({
@@ -124,22 +128,22 @@ export function recordNativeHeaderPicture(input: {
     input.paints,
   );
 
-  const available = Math.max(0, statX - DIFF_FILE_HEADER_LEFT);
+  const available = Math.max(0, statX - contentLeft);
   const name = fileNameForPath(input.file.path);
   const directory = directorySuffix(input.file.path).trimStart();
   const fitted = fitNativeHeaderText(input.textLayout, name, directory, available);
   canvas.save();
   canvas.clipRect(
-    Skia.XYWHRect(DIFF_FILE_HEADER_LEFT, 0, available, DIFF_FILE_HEADER_CONTENT_HEIGHT),
+    Skia.XYWHRect(contentLeft, 0, available, DIFF_FILE_HEADER_CONTENT_HEIGHT),
     ClipOp.Intersect,
     false,
   );
-  paintNativeHeaderText(canvas, fitted.name, DIFF_FILE_HEADER_LEFT);
+  paintNativeHeaderText(canvas, fitted.name, contentLeft);
   if (fitted.directory.width > 0) {
     paintNativeHeaderText(
       canvas,
       fitted.directory,
-      DIFF_FILE_HEADER_LEFT + fitted.name.width + DIFF_FILE_HEADER_TEXT_GAP,
+      contentLeft + fitted.name.width + DIFF_FILE_HEADER_TEXT_GAP,
     );
   }
   canvas.restore();

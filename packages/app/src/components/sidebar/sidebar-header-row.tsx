@@ -1,5 +1,14 @@
-import { useCallback, useState, type ComponentType, type ReactNode, type Ref } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type ComponentType,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { Pressable, Text, View } from "react-native";
+import { SPACING } from "@/styles/theme";
+import { usePaddedSideInsets } from "@/components/padded-side-insets";
 import { StyleSheet } from "react-native-unistyles";
 import { HEADER_INNER_HEIGHT, HEADER_INNER_HEIGHT_MOBILE } from "@/constants/layout";
 import { DensityIcon } from "@/components/ui/density-icon";
@@ -59,6 +68,21 @@ export function SidebarHeaderRow({
   const handlePressIn = useCallback(() => setIsPressed(true), []);
   const handlePressOut = useCallback(() => setIsPressed(false), []);
   const isHighlighted = isHovered || isActive;
+  // The header row's bottom rule reaches the sidebar's edges past a side inset; the row's content
+  // keeps its own padding inside the inset.
+  const padded = usePaddedSideInsets();
+  const headerBleedStyle = useMemo(
+    () =>
+      variant === "header"
+        ? {
+            marginLeft: -padded.left,
+            marginRight: -padded.right,
+            paddingLeft: SPACING[2] + padded.left,
+            paddingRight: SPACING[2] + padded.right,
+          }
+        : null,
+    [padded.left, padded.right, variant],
+  );
   const iconSize = variant === "header" ? "md" : "sm";
 
   let right = trailing ?? null;
@@ -67,7 +91,7 @@ export function SidebarHeaderRow({
   }
 
   return (
-    <View ref={rowRef} collapsable={false} style={getContainerStyle(variant)}>
+    <View ref={rowRef} collapsable={false} style={[getContainerStyle(variant), headerBleedStyle]}>
       <View
         style={[styles.row, isHighlighted && styles.rowHighlighted, isPressed && styles.rowPressed]}
         onPointerEnter={handlePointerEnter}

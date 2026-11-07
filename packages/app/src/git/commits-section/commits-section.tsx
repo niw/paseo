@@ -104,9 +104,13 @@ export function CommitsSection({
     () => [styles.headerChevron, !collapsed && styles.headerChevronExpanded],
     [collapsed],
   );
+  // The section's top border runs under the side insets; its rows stay inside them.
   const containerStyle = useMemo(
-    () => [styles.container, { paddingBottom: insets.bottom }],
-    [insets.bottom],
+    () => [
+      styles.container,
+      { paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right },
+    ],
+    [insets.bottom, insets.left, insets.right],
   );
 
   if (query.status === "unsupported") {

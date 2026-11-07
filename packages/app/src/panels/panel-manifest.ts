@@ -33,6 +33,12 @@ export interface PanelManifest<K extends WorkspaceTabTarget["kind"] = WorkspaceT
    * tab instead of adding a tab. `null` keeps it in the tab strip.
    */
   compactSheet: CompactSheetRule<K>;
+  /**
+   * The panel keeps its own controls inside the side safe-area insets and lets its content run
+   * under them, like the chat, the terminal grid or a diff. Otherwise the pane host pads the panel
+   * by the insets, so a panel that knows nothing about them still keeps its controls clear.
+   */
+  ownsSideInsets: boolean;
   resourceKey(target: Extract<WorkspaceTabTarget, { kind: K }>): string;
 }
 
@@ -47,6 +53,7 @@ const manifests = {
     showCloseButton: true,
     singleton: false,
     compactSheet: null,
+    ownsSideInsets: true,
     resourceKey: () => "new_tab",
   },
   draft: {
@@ -55,6 +62,7 @@ const manifests = {
     showCloseButton: true,
     singleton: false,
     compactSheet: null,
+    ownsSideInsets: true,
     resourceKey: (target) => target.draftId,
   },
   agent: {
@@ -64,6 +72,7 @@ const manifests = {
     singleton: false,
     compactSheet: (target, facts) =>
       facts.isWorkspaceRootAgent(target.agentId) ? null : { openAsTab: true },
+    ownsSideInsets: true,
     resourceKey: (target) => target.agentId,
   },
   provider_subagent: {
@@ -72,6 +81,7 @@ const manifests = {
     showCloseButton: true,
     singleton: false,
     compactSheet: { openAsTab: false },
+    ownsSideInsets: true,
     resourceKey: (target) => `${target.parentAgentId}:${target.subagentId}`,
   },
   terminal: {
@@ -80,6 +90,7 @@ const manifests = {
     showCloseButton: true,
     singleton: false,
     compactSheet: null,
+    ownsSideInsets: true,
     resourceKey: (target) => target.terminalId,
   },
   browser: {
@@ -88,6 +99,7 @@ const manifests = {
     showCloseButton: true,
     singleton: false,
     compactSheet: null,
+    ownsSideInsets: false,
     resourceKey: (target) => target.browserId,
   },
   changes_tree: {
@@ -96,6 +108,7 @@ const manifests = {
     showCloseButton: false,
     singleton: true,
     compactSheet: null,
+    ownsSideInsets: true,
     resourceKey: () => "changes_tree",
   },
   files: {
@@ -104,6 +117,7 @@ const manifests = {
     showCloseButton: false,
     singleton: true,
     compactSheet: null,
+    ownsSideInsets: true,
     resourceKey: () => "files",
   },
   pull_request: {
@@ -112,6 +126,7 @@ const manifests = {
     showCloseButton: true,
     singleton: false,
     compactSheet: null,
+    ownsSideInsets: true,
     resourceKey: () => "pull_request",
   },
   file: {
@@ -120,6 +135,7 @@ const manifests = {
     showCloseButton: true,
     singleton: false,
     compactSheet: { openAsTab: false },
+    ownsSideInsets: true,
     resourceKey: (target) => target.path,
   },
   working_diff: {
@@ -128,6 +144,7 @@ const manifests = {
     showCloseButton: true,
     singleton: false,
     compactSheet: null,
+    ownsSideInsets: true,
     resourceKey: () => "working_diff",
   },
   plugin: {
@@ -137,6 +154,7 @@ const manifests = {
     showCloseButton: true,
     singleton: false,
     compactSheet: null,
+    ownsSideInsets: false,
     resourceKey: (target) =>
       target.context === "agent"
         ? `${target.pluginId}:${target.panelId}:agent:${target.agentId}`
@@ -148,6 +166,7 @@ const manifests = {
     showCloseButton: true,
     singleton: false,
     compactSheet: null,
+    ownsSideInsets: true,
     resourceKey: (target) => target.workspaceId,
   },
   commit_diff: {
@@ -156,6 +175,7 @@ const manifests = {
     showCloseButton: true,
     singleton: false,
     compactSheet: null,
+    ownsSideInsets: true,
     resourceKey: (target) => target.sha,
   },
 } satisfies PanelManifestByKind;

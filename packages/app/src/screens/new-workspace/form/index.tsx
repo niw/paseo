@@ -1,4 +1,5 @@
 import { useCallback, useMemo, type ReactElement, type ReactNode, type RefObject } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
@@ -170,6 +171,15 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement 
   const projectPicker = useProjectPicker(project, isPending);
   const isolationPicker = useIsolationPicker(isolation, isPending);
   const renderRefOption = useRefRenderOption(base.itemById, isPending);
+  // The compact pickers sit in content that runs under the side insets; they stay inside them.
+  const safeAreaInsets = useSafeAreaInsets();
+  const compactStackStyle = useMemo(
+    () => [
+      styles.compactStack,
+      { marginLeft: safeAreaInsets.left, marginRight: safeAreaInsets.right },
+    ],
+    [safeAreaInsets.left, safeAreaInsets.right],
+  );
 
   const selectedHostLabel =
     host.allHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? "Host";
@@ -336,7 +346,7 @@ export function useNewWorkspaceForm(props: NewWorkspaceFormProps): ReactElement 
 
   if (isCompact) {
     return (
-      <View testID="new-workspace-ref-picker-row" style={styles.compactStack}>
+      <View testID="new-workspace-ref-picker-row" style={compactStackStyle}>
         {projectField}
         {hostField}
         {isolationField}

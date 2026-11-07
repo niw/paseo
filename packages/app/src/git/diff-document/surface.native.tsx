@@ -293,6 +293,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
             key={`${file.path}:header`}
             file={file}
             viewportWidth={model.viewportWidth}
+            insets={props.headerInsets}
             scrollTop={scrollTop}
             textLayout={headerTextLayout}
             paints={paints}
@@ -372,6 +373,7 @@ function NativeCanvasSlabLayer({
 function NativeCanvasFileHeader({
   file,
   viewportWidth,
+  insets,
   scrollTop,
   textLayout,
   paints,
@@ -384,6 +386,7 @@ function NativeCanvasFileHeader({
 }: {
   file: DiffFileSection;
   viewportWidth: number;
+  insets: DiffSurfaceProps["headerInsets"];
   scrollTop: SharedValue<number>;
   textLayout: NativeHeaderTextLayout;
   paints: NativePaints;
@@ -396,8 +399,8 @@ function NativeCanvasFileHeader({
 }) {
   const [active, setActive] = useState(false);
   const picture = useMemo(
-    () => recordNativeHeaderPicture({ file, viewportWidth, textLayout, paints }),
-    [file, paints, textLayout, viewportWidth],
+    () => recordNativeHeaderPicture({ file, viewportWidth, insets, textLayout, paints }),
+    [file, insets, paints, textLayout, viewportWidth],
   );
   const { top, bottom, headerHeight } = file;
   const stickyStyle = useAnimatedStyle(() => {

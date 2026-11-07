@@ -8,6 +8,7 @@ import invariant from "tiny-invariant";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { PaneContentToolbar } from "@/components/ui/pane-content-toolbar";
+import { SPACING } from "@/styles/theme";
 import { isWeb, isNative } from "@/constants/platform";
 import { DiffDocument } from "@/git/diff-document";
 import { ChangesSurface, DiffLayoutToggle, resolveDiffLayout } from "@/git/diff-pane";
@@ -193,7 +194,11 @@ function CommitDiffPanel() {
   return (
     <View style={styles.container} testID="commit-diff-panel">
       {panelPreferences.canUseSplitLayout ? (
-        <PaneContentToolbar style={styles.toolbar} testID="commit-diff-header">
+        <PaneContentToolbar
+          style={styles.toolbar}
+          paddingRight={SPACING[2]}
+          testID="commit-diff-header"
+        >
           <View style={styles.toolbarActions} testID="commit-diff-toolbar">
             <DiffLayoutToggle
               layout={panelPreferences.preferences.layout}
@@ -262,7 +267,6 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing[2],
-    paddingRight: theme.spacing[2],
   },
   toolbarActions: {
     flexDirection: "row",

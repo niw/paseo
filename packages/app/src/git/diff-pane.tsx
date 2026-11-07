@@ -15,7 +15,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { Theme } from "@/styles/theme";
+import { SPACING, type Theme } from "@/styles/theme";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
   AlignJustify,
@@ -607,15 +607,16 @@ function ChangesToolbarRow({
   trailing: ToolbarTrailingControl;
 }) {
   const toolbarStyle = useMemo(
-    () => [
-      styles.changesToolbar,
-      { paddingRight: paneContentToolbarTrailingPadding(compact, trailing) },
-      sidebarSurface ? styles.changesToolbarSidebar : null,
-    ],
-    [compact, sidebarSurface, trailing],
+    () => [styles.changesToolbar, sidebarSurface ? styles.changesToolbarSidebar : null],
+    [sidebarSurface],
   );
   return (
-    <PaneContentToolbar style={toolbarStyle} testID={testID}>
+    <PaneContentToolbar
+      style={toolbarStyle}
+      paddingLeft={SPACING[2]}
+      paddingRight={paneContentToolbarTrailingPadding(compact, trailing)}
+      testID={testID}
+    >
       {children}
     </PaneContentToolbar>
   );
@@ -1999,7 +2000,6 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingLeft: theme.spacing[2],
   },
   changesToolbarSidebar: {
     backgroundColor: theme.colors.surfaceSidebar,

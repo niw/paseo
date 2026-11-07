@@ -1,4 +1,5 @@
 import { View } from "react-native";
+import { useEdgeBleedStyle } from "@/components/padded-side-insets";
 import { StyleSheet } from "react-native-unistyles";
 
 /**
@@ -7,7 +8,9 @@ import { StyleSheet } from "react-native-unistyles";
  * separator beneath the workspace sidebar's "New agent" header.
  */
 export function SidebarSeparator({ testID }: { testID?: string } = {}) {
-  return <View style={styles.line} testID={testID} />;
+  // Past a side inset the sidebar pads its rows; the line still reaches its edges.
+  const edgeBleedStyle = useEdgeBleedStyle();
+  return <View style={[styles.line, edgeBleedStyle]} testID={testID} />;
 }
 
 const styles = StyleSheet.create((theme) => ({

@@ -1,5 +1,6 @@
 import { useCallback } from "react";
-import { Text, View } from "react-native";
+import { RegionPaddedView } from "@/components/padded-side-insets";
+import { Text } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { buildWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
@@ -58,10 +59,10 @@ export function PullRequestContent(input: {
     return <PullRequestPaneSkeleton />;
   }
   return (
-    <View style={styles.empty} testID="pull-request-empty-state">
+    <RegionPaddedView style={styles.empty} testID="pull-request-empty-state">
       <Text style={styles.emptyTitle}>{t("panels.pullRequest.emptyTitle")}</Text>
       <Text style={styles.emptyDescription}>{t("panels.pullRequest.emptyDescription")}</Text>
-    </View>
+    </RegionPaddedView>
   );
 }
 
