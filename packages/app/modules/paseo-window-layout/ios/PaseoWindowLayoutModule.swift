@@ -120,8 +120,15 @@ final class WindowLayoutView: ExpoView {
     if let frame = topBarGuide?.layoutFrame, frame.width > 0, frame.height > 0 {
       topBar = rect(frame)
     }
+    // The status bar's frame is in window coordinates. Where it is shorter than the top inset,
+    // the status items sit in the occlusions and the rest of the band is free.
+    var statusBar: Any = NSNull()
+    if let frame = window?.windowScene?.statusBarManager?.statusBarFrame, !frame.isEmpty {
+      statusBar = rect(convert(frame, from: nil))
+    }
     let payload: [String: Any] = [
       "bounds": rect(bounds),
+      "statusBar": statusBar,
       "verticalBarEdge": barEdge,
       "verticalBar": barPayload,
       "bottomClearance": bottomClearance,

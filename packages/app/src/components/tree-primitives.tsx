@@ -1,4 +1,6 @@
+import { useMemo } from "react";
 import { View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronRight } from "lucide-react-native";
 import { SPACING, type Theme } from "@/styles/theme";
@@ -24,6 +26,16 @@ export const WORKSPACE_PANE_TRAILING_GLYPH_RAIL = SPACING[2];
 /** Left padding for a row in either workspace tree. */
 export function treeRowPaddingLeft(depth: number): number {
   return SPACING[3] + depth * TREE_INDENT_PER_LEVEL;
+}
+
+/**
+ * The side insets a tree row adds to its padding. A tree list runs to its region's edges, so its
+ * row highlights do too, and each row keeps its content inside the insets of the window edges the
+ * region touches. Inside a surface that pads its own insets, like a sheet, there are none left.
+ */
+export function useTreeRowInsets(): { left: number; right: number } {
+  const { left, right } = useSafeAreaInsets();
+  return useMemo(() => ({ left, right }), [left, right]);
 }
 
 const foregroundExtraMutedIconColorMapping = (theme: Theme) => ({

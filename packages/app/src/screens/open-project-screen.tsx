@@ -1,4 +1,5 @@
 import { useHosts, useHostRuntimeLastError } from "@/runtime/host-runtime";
+import { useHorizontalSafeAreaPadding } from "@/components/safe-area-edges";
 import { useCallback, useEffect, useState, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { View, Text, Pressable, ScrollView } from "react-native";
@@ -59,12 +60,13 @@ export function OpenProjectScreen() {
     });
   }, [chooseHost, router]);
 
+  const safeAreaPadding = useHorizontalSafeAreaPadding();
   return (
     <View style={styles.container}>
       <MenuHeader borderless />
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, safeAreaPadding]}
         dataSet={WINDOW_CONTENT_DATASET}
       >
         <View style={styles.content}>

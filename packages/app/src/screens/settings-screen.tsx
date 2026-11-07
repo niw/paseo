@@ -3,6 +3,8 @@ import { AppearanceText as Text } from "@/appearance/text";
 import { useHardwareKeyboardPresent } from "@/keyboard";
 import { useAddHost } from "@/hosts/add-host";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { PaddedSideInsetsView } from "@/components/padded-side-insets";
+import { HorizontalSafeAreaRegion, useTopChromeInsets } from "@/components/safe-area-edges";
 import type { ComponentType, ReactNode } from "react";
 import { Alert, Pressable, ScrollView, View, type PressableStateCallbackType } from "react-native";
 import { useRouter } from "expo-router";
@@ -122,6 +124,7 @@ import { HostVoicePage } from "@/screens/settings/voice/voice-page";
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import {
+  HEADER_INNER_HEIGHT,
   SETTINGS_DESKTOP_DETAIL_MIN_WIDTH,
   SETTINGS_DESKTOP_SIDEBAR_WIDTH,
   useIsCompactFormFactor,
@@ -984,13 +987,25 @@ function SettingsSidebar({
   const insets = useSafeAreaInsets();
   const isDesktop = layout === "desktop";
   const sidebarScroll = useSettingsSidebarScroll(isDesktop);
+  // The desktop sidebar grows by its left inset so its rows keep their width.
   const outerContainerStyle = useMemo(
-    () => [isDesktop ? sidebarStyles.desktopContainer : sidebarStyles.mobileContainer],
-    [isDesktop],
+    () => [
+      isDesktop ? sidebarStyles.desktopContainer : sidebarStyles.mobileContainer,
+      isDesktop ? { width: SETTINGS_DESKTOP_SIDEBAR_WIDTH + insets.left } : null,
+    ],
+    [insets.left, isDesktop],
   );
+  // The settings screen hands the desktop sidebar only the left edge's inset. Its first row
+  // lines up with a header row that shares the top inset.
+  const topChrome = useTopChromeInsets(HEADER_INNER_HEIGHT);
   const innerContainerStyle = useMemo(
-    () => [{ flex: 1 }, isDesktop ? { paddingTop: insets.top } : null],
-    [insets.top, isDesktop],
+    () => [{ flex: 1 }, isDesktop ? { paddingTop: topChrome.paddingTop } : null],
+    [topChrome.paddingTop, isDesktop],
+  );
+  // The desktop sidebar keeps its rows clear of the left edge's inset; its rules still reach it.
+  const paddedInsets = useMemo(
+    () => ({ left: isDesktop ? insets.left : 0, right: 0 }),
+    [insets.left, isDesktop],
   );
   const selectedSectionId = view.kind === "section" ? view.section : null;
   let selectedHostSection: HostSectionSlug | null = null;
@@ -1081,7 +1096,7 @@ function SettingsSidebar({
       testID="settings-sidebar"
     >
       {isDesktop ? (
-        <View style={innerContainerStyle}>
+        <PaddedSideInsetsView style={innerContainerStyle} insets={paddedInsets}>
           <View style={sidebarStyles.sidebarDragArea}>
             <TitlebarDragRegion />
             <WindowChromeSafeArea placement="below" />
@@ -1100,7 +1115,7 @@ function SettingsSidebar({
           >
             {sidebarBody}
           </ScrollView>
-        </View>
+        </PaddedSideInsetsView>
       ) : (
         sidebarBody
       )}
@@ -1130,7 +1145,10 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
   const isCompactLayout = useIsCompactFormFactor();
   const onContentLayout = useSettingsContentPresented();
   const insets = useSafeAreaInsets();
-  const insetBottomStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
+  const insetBottomStyle = useMemo(
+    () => ({ paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }),
+    [insets.bottom, insets.left, insets.right],
+  );
   const hosts = useHosts();
   const localServerId = useLocalDaemonServerId();
   const sortedHosts = useSortedHosts(hosts, localServerId);
@@ -1424,29 +1442,33 @@ export default function SettingsScreen({ view }: SettingsScreenProps) {
     <View style={styles.container} onLayout={onContentLayout}>
       <View style={desktopStyles.row}>
         <WindowChromeRegion corners="top-left">
-          <SettingsSidebar
-            view={view}
-            onSelectSection={handleSelectSection}
-            onSelectHostSection={handleSelectHostSection}
-            onSelectHost={handleSelectHost}
-            onAddHost={handleAddHost}
-            onBackToWorkspace={handleBackToWorkspace}
-            activeHostServerId={activeHostServerId}
-            layout="desktop"
-          />
+          <HorizontalSafeAreaRegion edges={SETTINGS_SIDEBAR_SAFE_AREA_EDGES}>
+            <SettingsSidebar
+              view={view}
+              onSelectSection={handleSelectSection}
+              onSelectHostSection={handleSelectHostSection}
+              onSelectHost={handleSelectHost}
+              onAddHost={handleAddHost}
+              onBackToWorkspace={handleBackToWorkspace}
+              activeHostServerId={activeHostServerId}
+              layout="desktop"
+            />
+          </HorizontalSafeAreaRegion>
         </WindowChromeRegion>
         <WindowChromeRegion corners="top-right">
-          <View style={desktopStyles.contentPane} testID="settings-detail-pane">
-            <PageLayout
-              title={detailTitle}
-              actions={detailActions}
-              width={detailWidth}
-              titleTestID="settings-detail-header-title"
-              testID="settings-detail-scroll-body"
-            >
-              {content}
-            </PageLayout>
-          </View>
+          <HorizontalSafeAreaRegion edges={SETTINGS_DETAIL_SAFE_AREA_EDGES}>
+            <View style={desktopStyles.contentPane} testID="settings-detail-pane">
+              <PageLayout
+                title={detailTitle}
+                actions={detailActions}
+                width={detailWidth}
+                titleTestID="settings-detail-header-title"
+                testID="settings-detail-scroll-body"
+              >
+                {content}
+              </PageLayout>
+            </View>
+          </HorizontalSafeAreaRegion>
         </WindowChromeRegion>
       </View>
     </View>
@@ -1517,6 +1539,10 @@ const desktopStyles = StyleSheet.create({
     minWidth: SETTINGS_DESKTOP_DETAIL_MIN_WIDTH,
   },
 });
+
+// The settings sidebar takes the left edge's safe-area inset and the detail pane the right's.
+const SETTINGS_SIDEBAR_SAFE_AREA_EDGES = { left: true, right: false } as const;
+const SETTINGS_DETAIL_SAFE_AREA_EDGES = { left: false, right: true } as const;
 
 const sidebarStyles = StyleSheet.create((theme) => ({
   desktopContainer: {

@@ -14,6 +14,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { useEdgeBleedStyle } from "@/components/padded-side-insets";
 import { Check, CheckCircle } from "lucide-react-native";
 import { AdaptiveTextInput } from "@/components/adaptive-modal-sheet";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -99,7 +100,12 @@ export function MenuSeparator({
   style?: ViewStyle;
   testID?: string;
 }): ReactElement {
-  const separatorStyle = useMemo(() => [styles.separator, style], [style]);
+  // In a sheet the rule runs past the side insets to the sheet's edges.
+  const edgeBleedStyle = useEdgeBleedStyle();
+  const separatorStyle = useMemo(
+    () => [styles.separator, edgeBleedStyle, style],
+    [edgeBleedStyle, style],
+  );
   return <View style={separatorStyle} testID={testID} />;
 }
 

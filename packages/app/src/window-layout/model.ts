@@ -18,52 +18,20 @@ export interface WindowLayout {
   topBar?: WindowLayoutRect | null;
   /** Active system occlusions (status region, camera, Live Activities), margins included. */
   occlusions?: WindowLayoutRect[];
+  /** The status bar's frame, or null where no status bar shows. */
+  statusBar?: WindowLayoutRect | null;
   divisions: WindowLayoutRect[];
 }
 
-/**
- * The band above the rectangular safe area that a top bar may use because the system
- * occupies only its trailing end, like window controls on a desktop title bar.
- */
-export interface TopBand {
-  /** Where the top bar starts, in window points. */
-  top: number;
-  /**
-   * The system region past the bar's trailing end, measured from the band's top, or null
-   * when the bar reaches the window's trailing edge.
-   */
-  trailingObstruction: { width: number; height: number } | null;
-}
-
-/** Null unless the top bar guide starts above the system's rectangular safe area. */
-export function resolveTopBand(systemTop: number, layout: WindowLayout | null): TopBand | null {
-  const bar = layout?.topBar;
-  if (!layout || !bar || bar.y >= systemTop) return null;
-  const top = Math.max(0, bar.y);
-  const barEnd = bar.x + bar.width;
-  const width = Math.ceil(layout.bounds.width - barEnd);
-  if (width <= 0) return { top, trailingObstruction: null };
-  const beside = (layout.occlusions ?? []).filter(
-    (frame) => frame.x + frame.width > barEnd && frame.y < bar.y + bar.height,
-  );
-  const bottom = Math.max(bar.y + bar.height, ...beside.map((frame) => frame.y + frame.height));
-  return { top, trailingObstruction: { width, height: Math.ceil(bottom - top) } };
-}
-
-/**
- * The window's measured bars replace the rectangular safe area: the bottom bar's clearance,
- * and the top bar's start when it sits above the system top.
- */
-export function resolveSafeAreaInsets<Insets extends { top: number; bottom: number }>(
+/** The window's measured bottom clearance replaces the rectangular safe-area bottom. */
+export function resolveSafeAreaInsets<Insets extends { bottom: number }>(
   systemInsets: Insets,
   layout: WindowLayout | null,
 ): Insets {
   const clearance = layout?.bottomClearance;
-  const bottom = typeof clearance === "number" ? clearance : systemInsets.bottom;
-  const top = resolveTopBand(systemInsets.top, layout)?.top ?? systemInsets.top;
-  return top === systemInsets.top && bottom === systemInsets.bottom
-    ? systemInsets
-    : { ...systemInsets, top, bottom };
+  return typeof clearance === "number" && clearance !== systemInsets.bottom
+    ? { ...systemInsets, bottom: clearance }
+    : systemInsets;
 }
 
 export interface DesktopDivisionLayout {
@@ -78,6 +46,12 @@ export function resolveWorkspaceActionPlacement(
   return layout?.verticalBarEdge === "trailing" && layout.verticalBar !== null
     ? "vertical-bar"
     : "header";
+}
+
+/** The window edge whose side inset holds the vertical bar's actions, or null without one. */
+export function resolveVerticalBarEdge(layout: WindowLayout | null): "left" | "right" | null {
+  // The bar guide sits on the screen's right edge for the trailing bar.
+  return resolveWorkspaceActionPlacement(layout) === "vertical-bar" ? "right" : null;
 }
 
 export function resolveWorkspaceBarActions(

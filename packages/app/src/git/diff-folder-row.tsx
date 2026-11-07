@@ -5,7 +5,9 @@ import { DiffStat } from "@/components/diff-stat";
 import {
   TreeChevron,
   treeRowPaddingLeft,
+  useTreeRowInsets,
   workspaceTreeRowStyles,
+  WORKSPACE_PANE_TRAILING_GLYPH_RAIL,
   WORKSPACE_TREE_ICON_LABEL_GAP,
   WORKSPACE_TREE_ICON_SIZE,
 } from "@/components/tree-primitives";
@@ -40,9 +42,11 @@ interface DiffFolderRowProps {
 function folderRowPressableStyle(
   { hovered, pressed }: PressableStateCallbackType & { hovered?: boolean },
   isSelected: boolean,
+  insetRight: number,
 ) {
   return [
     workspaceTreeRowStyles.row,
+    inlineUnistylesStyle({ paddingRight: WORKSPACE_PANE_TRAILING_GLYPH_RAIL + insetRight }),
     (Boolean(hovered) || pressed || isSelected) && workspaceTreeRowStyles.active,
   ];
 }
@@ -83,10 +87,12 @@ export function DiffFolderRow({
     onToggle(dirPath);
   }, [dirPath, handleSelect, onToggle]);
 
+  // In a list that reaches a side inset, the row's background does too; its content stays inside.
+  const rowInsets = useTreeRowInsets();
   const pressableStyle = useCallback(
     (state: PressableStateCallbackType & { hovered?: boolean }) =>
-      folderRowPressableStyle(state, isSelected),
-    [isSelected],
+      folderRowPressableStyle(state, isSelected, rowInsets.right),
+    [isSelected, rowInsets.right],
   );
 
   const handleLayout = useCallback(
@@ -124,10 +130,10 @@ export function DiffFolderRow({
     () => [
       styles.left,
       inlineUnistylesStyle({
-        paddingLeft: treeRowPaddingLeft(depth),
+        paddingLeft: treeRowPaddingLeft(depth) + rowInsets.left,
       }),
     ],
-    [depth],
+    [depth, rowInsets.left],
   );
 
   const accessibilityState = useMemo(

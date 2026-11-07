@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { RegionPaddedView } from "@/components/padded-side-insets";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import invariant from "tiny-invariant";
@@ -243,9 +244,9 @@ function ProviderSubagentPanel() {
 
   if (serverInfo && !supported) {
     return (
-      <View style={styles.unsupported} testID="provider-subagent-panel-unsupported">
+      <RegionPaddedView style={styles.unsupported} testID="provider-subagent-panel-unsupported">
         <Text style={styles.unsupportedText}>{t("message.actions.forkUnavailable")}</Text>
-      </View>
+      </RegionPaddedView>
     );
   }
 
@@ -275,7 +276,10 @@ function ProviderSubagentPanel() {
           sheetTabFor={sheetTabFor}
         />
       </View>
-      <ParentAgentCallout serverId={serverId} parentAgentId={target.parentAgentId} />
+      {/* The callout sits where a composer would, inside the side insets. */}
+      <RegionPaddedView>
+        <ParentAgentCallout serverId={serverId} parentAgentId={target.parentAgentId} />
+      </RegionPaddedView>
     </View>
   );
 }
