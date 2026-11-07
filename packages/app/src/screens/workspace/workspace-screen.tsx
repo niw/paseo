@@ -50,6 +50,10 @@ import type { Theme } from "@/styles/theme";
 import invariant from "tiny-invariant";
 import { SidebarMenuToggle } from "@/components/headers/sidebar-menu-toggle";
 import { ScreenHeader } from "@/components/headers/screen-header";
+import {
+  type HorizontalSafeAreaEdges,
+  HorizontalSafeAreaRegion,
+} from "@/components/safe-area-edges";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { FloatingHeaderLayout } from "@/components/floating-header";
 import { StreamTopOverlayProvider, supportsStreamTopOverlay } from "@/agent-stream/top-overlay";
@@ -884,6 +888,15 @@ function floatsHeaderOverContent(activeTab: WorkspaceTabDescriptor | null): bool
 }
 
 /** A fullscreen composer covers the compact header; the column lays out without it. */
+/** A docked explorer takes the right edge's safe-area inset from the column beside it. */
+function useDesktopCenterColumnSafeAreaEdges(
+  isExplorerShowing: boolean,
+  isFocusModeEnabled: boolean,
+): HorizontalSafeAreaEdges {
+  const isExplorerDocked = isExplorerShowing && !isFocusModeEnabled;
+  return useMemo(() => ({ left: true, right: !isExplorerDocked }), [isExplorerDocked]);
+}
+
 function resolveCompactHeaderLayout(input: {
   header: ReactNode;
   activeTab: WorkspaceTabDescriptor | null;
@@ -1037,15 +1050,19 @@ function useLastMainPane(input: {
 function DesktopCenterColumnChrome({
   explorerOpen,
   focusModeEnabled,
+  safeAreaEdges,
   children,
 }: {
   explorerOpen: boolean;
   focusModeEnabled: boolean;
+  safeAreaEdges: HorizontalSafeAreaEdges;
   children: ReactNode;
 }) {
   return (
     <WindowChromeRegion corners={explorerOpen && !focusModeEnabled ? "top-left" : "both"}>
-      <View style={styles.centerColumn}>{children}</View>
+      <HorizontalSafeAreaRegion edges={safeAreaEdges} style={styles.centerColumn}>
+        {children}
+      </HorizontalSafeAreaRegion>
     </WindowChromeRegion>
   );
 }
@@ -3672,6 +3689,10 @@ function WorkspaceScreenContent({
     composerFullscreen: useComposerTabFullscreen(workspacePanelKey, activeTabId),
   });
 
+  const desktopCenterColumnSafeAreaEdges = useDesktopCenterColumnSafeAreaEdges(
+    isExplorerSidebarShowing,
+    desktopFocusModeEnabled,
+  );
   // Compact sheets escape to the app overlay host, above both sidebars.
   const workspaceCenterColumn = isMobile ? (
     <View style={styles.centerColumn}>
@@ -3691,6 +3712,7 @@ function WorkspaceScreenContent({
     <DesktopCenterColumnChrome
       explorerOpen={isExplorerSidebarShowing}
       focusModeEnabled={desktopFocusModeEnabled}
+      safeAreaEdges={desktopCenterColumnSafeAreaEdges}
     >
       {rendersDesktopSplitContent ? null : (
         <AdaptiveWorkspaceChrome compactHeader={centerColumnCompactHeader}>

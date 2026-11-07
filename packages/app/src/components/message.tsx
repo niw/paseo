@@ -1,5 +1,6 @@
 import { useDisclosureHold } from "@/agent-stream/disclosure";
 import { MessagePreview, MessageSender } from "@/components/user-message";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { getAgentAttachmentPillContent } from "@/attachments/attachment-pill-content";
 import { AssistantForkMenu, type AssistantForkTarget } from "@/components/assistant-fork-menu";
@@ -409,6 +410,7 @@ export const UserMessage = memo(function UserMessage({
   isPending = false,
   disableOuterSpacing,
 }: UserMessageProps) {
+  const safeAreaInsets = useSafeAreaInsets();
   const isCompact = useIsCompactFormFactor();
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
@@ -447,8 +449,17 @@ export const UserMessage = memo(function UserMessage({
         isLastInGroup ? userMessageStylesheet.containerLastInGroup : null,
         !isFirstInGroup || !isLastInGroup ? userMessageStylesheet.containerSpacing : null,
       ],
+      // The stream runs under the side insets. The bubble sits at the trailing edge with its
+      // rewind and copy buttons, so it stays inside them.
+      { marginLeft: safeAreaInsets.left, marginRight: safeAreaInsets.right },
     ],
-    [resolvedDisableOuterSpacing, isFirstInGroup, isLastInGroup],
+    [
+      resolvedDisableOuterSpacing,
+      isFirstInGroup,
+      isLastInGroup,
+      safeAreaInsets.left,
+      safeAreaInsets.right,
+    ],
   );
   const imagePreviewContainerStyle = useMemo(
     () => [

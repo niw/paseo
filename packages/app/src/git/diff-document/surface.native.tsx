@@ -222,10 +222,18 @@ export function DiffSurface(props: DiffSurfaceProps) {
     scrollTop.value = event.contentOffset.y;
   });
 
+  // The scroll view spans the edge; the document lays out short of the right inset.
+  const [measured, setMeasured] = useState({ width: 0, height: 0 });
   const layout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
-    setViewport((current) => retainDiffViewport(current, { width, height }));
+    setMeasured({ width, height });
   }, []);
+  const layoutWidth = Math.max(0, measured.width - props.layoutInsetRight);
+  useLayoutEffect(() => {
+    setViewport((current) =>
+      retainDiffViewport(current, { width: layoutWidth, height: measured.height }),
+    );
+  }, [layoutWidth, measured.height]);
   useLayoutEffect(() => {
     const previous = previousModelRef.current;
     if (previous && previous !== model) {
@@ -293,6 +301,7 @@ export function DiffSurface(props: DiffSurfaceProps) {
             key={`${file.path}:header`}
             file={file}
             viewportWidth={model.viewportWidth}
+            insets={props.headerInsets}
             scrollTop={scrollTop}
             textLayout={headerTextLayout}
             paints={paints}
@@ -372,6 +381,7 @@ function NativeCanvasSlabLayer({
 function NativeCanvasFileHeader({
   file,
   viewportWidth,
+  insets,
   scrollTop,
   textLayout,
   paints,
@@ -384,6 +394,7 @@ function NativeCanvasFileHeader({
 }: {
   file: DiffFileSection;
   viewportWidth: number;
+  insets: DiffSurfaceProps["headerInsets"];
   scrollTop: SharedValue<number>;
   textLayout: NativeHeaderTextLayout;
   paints: NativePaints;
@@ -396,8 +407,8 @@ function NativeCanvasFileHeader({
 }) {
   const [active, setActive] = useState(false);
   const picture = useMemo(
-    () => recordNativeHeaderPicture({ file, viewportWidth, textLayout, paints }),
-    [file, paints, textLayout, viewportWidth],
+    () => recordNativeHeaderPicture({ file, viewportWidth, insets, textLayout, paints }),
+    [file, insets, paints, textLayout, viewportWidth],
   );
   const { top, bottom, headerHeight } = file;
   const stickyStyle = useAnimatedStyle(() => {

@@ -104,6 +104,11 @@ interface TerminalEmulatorProps {
   fontFamily?: string;
   fontSize?: number;
   keyboardInset?: number;
+  /**
+   * Width at the right edge where the grid draws no cells but still takes touches, so the
+   * terminal scrolls to the edge while its text stops before a vertical bar of actions. Native only.
+   */
+  gridInsetRight?: number;
   isKeyboardVisible?: boolean;
   swipeGesturesEnabled?: boolean;
   onSwipeLeft?: () => void;
