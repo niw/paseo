@@ -3,7 +3,7 @@ import {
   useFloatingHeaderOverlayClearance,
 } from "@/components/floating-header";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useTopChromeInsets } from "@/components/safe-area-edges";
+import { useTopChromeInsets } from "@/utils/desktop-window";
 import { createPortal } from "react-dom";
 import { Platform, StyleSheet as NativeStyleSheet, Text, ToastAndroid, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
