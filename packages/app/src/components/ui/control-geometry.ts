@@ -1,4 +1,5 @@
 import type { StyleProp, ViewStyle } from "react-native";
+import { usesTouchSizing } from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 /**
@@ -31,7 +32,7 @@ const SMALL_CONTROL_HEIGHT = 28;
 // pointer drives it.
 const DEFAULT_CONTROL_HEIGHT_COMPACT_LAYOUT = 44;
 const DEFAULT_CONTROL_HEIGHT_WIDE_LAYOUT = 32;
-export const HEADER_CONTROL_HEIGHT = 26;
+export const HEADER_CONTROL_HEIGHT = usesTouchSizing ? 32 : 26;
 const SEGMENTED_INSET = 2;
 const CONTROL_FOCUS_RING_WIDTH = 2;
 const CONTROL_FOCUS_RING_OFFSET = 1;
@@ -46,6 +47,11 @@ function byLayout(compact: number, wide: number): LayoutValue {
   return { xs: compact, md: wide };
 }
 
+/** A height: touch-driven apps keep the compact height in wide layouts; see `usesTouchSizing`. */
+function heightByLayout(compact: number, wide: number): LayoutValue {
+  return byLayout(compact, usesTouchSizing ? compact : wide);
+}
+
 function mapLayout(value: LayoutValue, map: (height: number) => number): LayoutValue {
   return byLayout(map(value.xs), map(value.md));
 }
@@ -58,14 +64,14 @@ function mapLayout(value: LayoutValue, map: (height: number) => number): LayoutV
  */
 export const CONTROL_HEIGHTS = {
   sm: SMALL_CONTROL_HEIGHT,
-  md: byLayout(DEFAULT_CONTROL_HEIGHT_COMPACT_LAYOUT, DEFAULT_CONTROL_HEIGHT_WIDE_LAYOUT),
+  md: heightByLayout(DEFAULT_CONTROL_HEIGHT_COMPACT_LAYOUT, DEFAULT_CONTROL_HEIGHT_WIDE_LAYOUT),
 } satisfies Record<ControlSize, number | LayoutValue>;
 
 /** The height of a control of `size`, for code that has to compute with it outside a stylesheet. */
 export function controlHeightForLayout(size: ControlSize, isCompact: boolean): number {
   const height = CONTROL_HEIGHTS[size];
   if (typeof height === "number") return height;
-  return isCompact ? height.xs : height.md;
+  return isCompact || usesTouchSizing ? height.xs : height.md;
 }
 
 export const controlIconSize: Record<ControlSize, number> = {
@@ -96,7 +102,7 @@ const SWITCH_TOUCH = switchSize(44, 26, 22);
  * animation, so the size is resolved to plain numbers here instead of a stylesheet breakpoint.
  */
 export function switchGeometryForLayout(size: ControlSize, isCompact: boolean): SwitchGeometry {
-  const track = size === "md" && isCompact ? SWITCH_TOUCH : SWITCH_POINTER;
+  const track = size === "md" && (isCompact || usesTouchSizing) ? SWITCH_TOUCH : SWITCH_POINTER;
   return { ...track, reservedHeight: controlHeightForLayout(size, isCompact) };
 }
 

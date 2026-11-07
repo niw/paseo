@@ -11,7 +11,8 @@ vi.mock("@/constants/platform", () => ({
   isNative: false,
 }));
 
-vi.mock("@/constants/layout", () => ({
+vi.mock("@/constants/layout", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/constants/layout")>()),
   useIsCompactFormFactor: () => false,
 }));
 

@@ -1,4 +1,4 @@
-import { isCompactBreakpoint } from "@/constants/layout";
+import { isCompactBreakpoint, usesTouchSizing } from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 /**
@@ -14,9 +14,10 @@ export type DensityIconSize = keyof typeof ICON_SIZE;
 
 const COMPACT_ICON_SIZE: Record<DensityIconSize, number> = { xs: 14, sm: 18, md: 20, lg: 24 };
 
-// Compact layouts end where `md` begins; see `isCompactBreakpoint`.
+// Compact layouts end where `md` begins; see `isCompactBreakpoint`. Touch-driven apps keep the
+// compact sizes of rows, buttons and icons in wide layouts too; see `usesTouchSizing`.
 function byLayout<T>(compact: T, desktop: T) {
-  return { xs: compact, md: desktop };
+  return { xs: compact, md: usesTouchSizing ? compact : desktop };
 }
 
 export const density = {
@@ -27,7 +28,7 @@ export const density = {
   /** A square icon-only button that sits in a row or toolbar. */
   iconButton: byLayout(44, 28),
   /** The space between two blocks of rich text, such as Markdown paragraphs, code and images. */
-  blockGap: byLayout(12, 16),
+  blockGap: { xs: 12, md: 16 },
 };
 
 /** Resolves a density value for a prop, which Unistyles cannot resolve on its own. */

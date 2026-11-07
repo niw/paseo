@@ -3263,18 +3263,7 @@ function WorkspaceScreenContent({
           />
         ) : null}
         {workspaceDirectory ? (
-          <>
-            <WorkspaceActions serverId={normalizedServerId} cwd={workspaceDirectory} />
-            <WorkspaceHeaderExplorerToggle
-              owner={explorerToggleOwner}
-              onPress={handleToggleExplorerSidebar}
-              label={explorerSidebarToggleLabel}
-              tooltipLabel={t("workspace.tabs.explorerSidebar.toggle")}
-              tooltipKeys={EXPLORER_TOGGLE_KEYS}
-              style={styles.compactHeaderActionButton}
-              accessibilityState={explorerSidebarToggleAccessibilityState}
-            />
-          </>
+          <WorkspaceActions serverId={normalizedServerId} cwd={workspaceDirectory} />
         ) : null}
       </View>
     ),
@@ -3288,6 +3277,25 @@ function WorkspaceScreenContent({
       handleScriptTerminalStarted,
       handleViewScriptTerminal,
       handleOpenUrlInBrowserTab,
+    ],
+  );
+  // The explorer toggle stays on the header's first row, beside the title, when the other
+  // actions move to a second row.
+  const headerTrailing = useMemo(
+    () =>
+      workspaceDirectory ? (
+        <WorkspaceHeaderExplorerToggle
+          owner={explorerToggleOwner}
+          onPress={handleToggleExplorerSidebar}
+          label={explorerSidebarToggleLabel}
+          tooltipLabel={t("workspace.tabs.explorerSidebar.toggle")}
+          tooltipKeys={EXPLORER_TOGGLE_KEYS}
+          style={styles.headerExplorerToggle}
+          accessibilityState={explorerSidebarToggleAccessibilityState}
+        />
+      ) : null,
+    [
+      workspaceDirectory,
       handleToggleExplorerSidebar,
       explorerSidebarToggleLabel,
       explorerSidebarToggleAccessibilityState,
@@ -3375,6 +3383,7 @@ function WorkspaceScreenContent({
             </>
           }
           right={headerRight}
+          trailing={headerTrailing}
         />
       ) : null,
     [
@@ -3384,6 +3393,7 @@ function WorkspaceScreenContent({
       handleCopyWorkspacePath,
       handleOpenSetupTab,
       headerRight,
+      headerTrailing,
       isWorkspaceHeaderLoading,
       normalizedServerId,
       openImportSheet,
@@ -3942,7 +3952,12 @@ const styles = StyleSheet.create((theme) => ({
       md: theme.spacing[2],
     },
   },
-  compactHeaderActionButton: {
+  headerExplorerToggle: {
+    // The header's actions keep this gap to it on either row.
+    marginLeft: {
+      xs: theme.spacing[1],
+      md: theme.spacing[2],
+    },
     marginRight: {
       xs: 0,
       md: -theme.spacing[2],

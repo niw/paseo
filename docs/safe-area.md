@@ -137,6 +137,9 @@ declares `corners="none"` so it doesn't move its ends in twice.
   `packages/app/src/agent-stream/column.ts`). Controls stay inside the insets: the user message's
   buttons, and every row other than a message, like a tool call, a permission prompt or the turn
   footer (`useStreamColumnInsets()`, `useStreamControlsRowPadding()`).
+- A header row that cannot fit its right group beside the sidebar toggle and title moves the right
+  group to a second row (`ScreenHeader`), so no button covers another. The sidebar toggles stay on
+  the first row: pass the right one as `trailing`.
 - Pad a scroll view of controls through its content container, or give it margins when its style
   already sets horizontal padding. `paddingLeft` replaces `paddingHorizontal`; it doesn't add to it.
 - A tree row adds `useTreeRowInsets()` to its padding, so the list and the row highlights reach the
