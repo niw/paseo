@@ -21,7 +21,11 @@ import { Gesture } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTopChromeInsets, useWindowSafeAreaInsets } from "@/components/safe-area-edges";
+import {
+  TopRowExtraInsetsProvider,
+  useTopChromeInsets,
+  useWindowSafeAreaInsets,
+} from "@/components/safe-area-edges";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { SidebarCloseButton } from "@/components/headers/sidebar-close-button";
@@ -238,10 +242,15 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
 
   // The sidebar's first row lines up with a header row that shares the top inset.
   const desktopTopChrome = useTopChromeInsets(HEADER_INNER_HEIGHT);
+  // The first row moves in past the rounded corners and occluded corners its ends reach.
+  const topRowExtraInsets = useMemo(
+    () => ({ left: desktopTopChrome.paddingLeft, right: desktopTopChrome.paddingRight }),
+    [desktopTopChrome.paddingLeft, desktopTopChrome.paddingRight],
+  );
 
   if (isCompactLayout) {
     return (
-      <>
+      <TopRowExtraInsetsProvider value={topRowExtraInsets}>
         <RetainedPanelActivity active={active}>
           <MobileSidebar
             {...sharedProps}
@@ -257,12 +266,12 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
           />
         </RetainedPanelActivity>
         {importSessionSheet}
-      </>
+      </TopRowExtraInsetsProvider>
     );
   }
 
   return (
-    <>
+    <TopRowExtraInsetsProvider value={topRowExtraInsets}>
       <RetainedPanelActivity active={active}>
         <DesktopSidebar
           {...sharedProps}
@@ -276,7 +285,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
         />
       </RetainedPanelActivity>
       {importSessionSheet}
-    </>
+    </TopRowExtraInsetsProvider>
   );
 });
 
@@ -782,7 +791,14 @@ function DesktopSidebar({
           ) : (
             <TitlebarDragRegion />
           )}
-          <SidebarNavRows style={sidebarHeaderGroupStyle} />
+          {/* Below the chrome row the nav rows are clear of the top corners. */}
+          {ownsTopLeft || DEV_BUILD_LABEL ? (
+            <TopRowExtraInsetsProvider value={NO_TOP_ROW_EXTRA_INSETS}>
+              <SidebarNavRows style={sidebarHeaderGroupStyle} />
+            </TopRowExtraInsetsProvider>
+          ) : (
+            <SidebarNavRows style={sidebarHeaderGroupStyle} />
+          )}
         </View>
 
         {isInitialLoad && !hasActiveHostFilter ? (
@@ -851,6 +867,7 @@ function WorkspacesSectionHeader() {
 // Electron does not clip app-region rectangles to scroll viewports, so rows scrolled
 // up under the sidebar header turn its drag region into no-drag. See index.html.
 const WINDOW_CONTENT_DATASET = { windowContent: "true" };
+const NO_TOP_ROW_EXTRA_INSETS = { left: 0, right: 0 };
 
 // Stable element so the sidebar list's listHeaderComponent prop keeps identity across
 // renders (WorkspacesSectionHeader takes no props).

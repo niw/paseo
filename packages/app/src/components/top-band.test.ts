@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveTopBand } from "./top-band";
+import { resolveCornerClearance, resolveTopBand } from "./top-band";
 
 const thinStatusBar = { x: 0, y: 0, width: 669, height: 2 };
 
@@ -72,5 +72,20 @@ describe("resolveTopBand", () => {
         snapshot: { statusBar: null, occlusions: [{ x: 200, y: 0, width: 200, height: 82 }] },
       }),
     ).toBeNull();
+  });
+});
+
+describe("resolveCornerClearance", () => {
+  it("reaches the full radius at the top edge", () => {
+    expect(resolveCornerClearance(59, 0)).toBe(59);
+  });
+
+  it("shrinks along the arc", () => {
+    expect(resolveCornerClearance(59, 20)).toBeCloseTo(14.7, 1);
+  });
+
+  it("is zero below the arc and without a radius", () => {
+    expect(resolveCornerClearance(59, 59)).toBe(0);
+    expect(resolveCornerClearance(0, 0)).toBe(0);
   });
 });

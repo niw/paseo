@@ -39,3 +39,13 @@ export function resolveTopBand(input: {
   if (windowWidth - left - right < MIN_FREE_WIDTH) return null;
   return { height: topInset, left, right };
 }
+
+/**
+ * How far in from a side edge a point at `y` from the top has to sit to clear a rounded display
+ * corner of `radius`. Zero below the corner's arc.
+ */
+export function resolveCornerClearance(radius: number, y: number): number {
+  if (radius <= 0 || y >= radius) return 0;
+  const dy = radius - Math.max(y, 0);
+  return radius - Math.sqrt(radius * radius - dy * dy);
+}

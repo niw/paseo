@@ -27,6 +27,14 @@ occluded corners. Regions narrow the band's corners by edge, like the side inset
 The explorer panel pads its own top, so only its tab row sits beside the corner:
 `TopRowExtraInsetsProvider` hands the band's corners to that row alone.
 
+The same hook keeps a top row's end controls clear of the display's rounded corners where the top
+inset is 0, like iPhone Duo with its camera strip on the side. It moves only the row's ends inward,
+by the depth of the corner's arc at the controls' height (`resolveCornerClearance`); the row keeps
+its height and position. The native module reads each corner's radius from a
+window-filling view with a container-concentric corner configuration (`effectiveRadius(corner:)`,
+iOS 26). The radii differ per corner: iPhone Duo folded has 8pt corners on the hinge side and 59pt
+on the other.
+
 ## Regions own edges
 
 The app draws side-by-side regions: the sidebar, the content, and the docked explorer. Each region

@@ -7,7 +7,7 @@ import {
 } from "react-native-safe-area-context";
 import { subscribeReservedRegions } from "@/native/reserved-regions";
 import type { ReservedRegionsSnapshot } from "@/native/reserved-regions-types";
-import { resolveTopBand, type TopBand } from "./top-band";
+import { resolveCornerClearance, resolveTopBand, type TopBand } from "./top-band";
 
 export interface HorizontalSafeAreaEdges {
   left: boolean;
@@ -16,6 +16,11 @@ export interface HorizontalSafeAreaEdges {
 
 const WindowSafeAreaInsetsContext = createContext<EdgeInsets | null>(null);
 const TopBandContext = createContext<TopBand | null>(null);
+const TopCornerRadiiContext = createContext({ left: 0, right: 0 });
+/** Which window edges this region touches, for the rounded corners on those edges. */
+const RegionEdgesContext = createContext<HorizontalSafeAreaEdges>({ left: true, right: true });
+/** A top row's controls sit about this tall, centered in the row. */
+const TOP_ROW_CONTROL_HEIGHT = 32;
 const TopRowExtraInsetsContext = createContext<{ left: number; right: number }>({
   left: 0,
   right: 0,
@@ -34,13 +39,27 @@ export function TopBandProvider({ children }: { children: ReactNode }) {
     () => resolveTopBand({ windowWidth, topInset, snapshot }),
     [snapshot, topInset, windowWidth],
   );
-  return <TopBandContext.Provider value={value}>{children}</TopBandContext.Provider>;
+  const topLeftRadius = snapshot?.cornerRadii?.topLeft ?? 0;
+  const topRightRadius = snapshot?.cornerRadii?.topRight ?? 0;
+  const topCornerRadii = useMemo(
+    () => ({ left: topLeftRadius, right: topRightRadius }),
+    [topLeftRadius, topRightRadius],
+  );
+  return (
+    <TopCornerRadiiContext.Provider value={topCornerRadii}>
+      <TopBandContext.Provider value={value}>{children}</TopBandContext.Provider>
+    </TopCornerRadiiContext.Provider>
+  );
 }
 
 /**
  * Where a row at the top of this region goes. When the top inset is shareable, the row sits at
  * the bottom of the band, beside the occluded corners, instead of below the whole band. Pass the
- * row's height; the result replaces `insets.top` as its top padding.
+ * row's height; `paddingTop` replaces `insets.top` as its top padding.
+ *
+ * `paddingLeft` and `paddingRight` come on top of the side insets: the band's occluded corners,
+ * and where the row runs into a rounded display corner, as it does on iPhone Duo where the top
+ * inset is 0, just enough to bring the row's end controls inside the corner's arc.
  */
 export function useTopChromeInsets(rowHeight: number): {
   paddingTop: number;
@@ -48,15 +67,25 @@ export function useTopChromeInsets(rowHeight: number): {
   paddingRight: number;
 } {
   const band = useContext(TopBandContext);
-  const { top } = useSafeAreaInsets();
+  const radii = useContext(TopCornerRadiiContext);
+  const edges = useContext(RegionEdgesContext);
+  const insets = useSafeAreaInsets();
+  const windowInsets = useWindowSafeAreaInsets();
   return useMemo(() => {
-    if (!band) return { paddingTop: top, paddingLeft: 0, paddingRight: 0 };
+    const paddingTop = band ? Math.max(band.height - rowHeight, 0) : insets.top;
+    const controlTop = paddingTop + Math.max(rowHeight - TOP_ROW_CONTROL_HEIGHT, 0) / 2;
+    const cornerLeft = edges.left
+      ? Math.max(resolveCornerClearance(radii.left, controlTop) - windowInsets.left, 0)
+      : 0;
+    const cornerRight = edges.right
+      ? Math.max(resolveCornerClearance(radii.right, controlTop) - windowInsets.right, 0)
+      : 0;
     return {
-      paddingTop: Math.max(band.height - rowHeight, 0),
-      paddingLeft: band.left,
-      paddingRight: band.right,
+      paddingTop,
+      paddingLeft: Math.max(band?.left ?? 0, cornerLeft),
+      paddingRight: Math.max(band?.right ?? 0, cornerRight),
     };
-  }, [band, rowHeight, top]);
+  }, [band, edges, insets.top, radii, rowHeight, windowInsets.left, windowInsets.right]);
 }
 
 /**
@@ -114,12 +143,21 @@ export function HorizontalSafeAreaRegion({
     () => (band ? { height: band.height, left: bandLeft, right: bandRight } : null),
     [band, bandLeft, bandRight],
   );
+  const parentEdges = useContext(RegionEdgesContext);
+  const touchesLeft = parentEdges.left && edges.left;
+  const touchesRight = parentEdges.right && edges.right;
+  const regionEdges = useMemo(
+    () => ({ left: touchesLeft, right: touchesRight }),
+    [touchesLeft, touchesRight],
+  );
   return (
     <WindowSafeAreaInsetsContext.Provider value={windowInsets}>
       <TopBandContext.Provider value={regionBand}>
-        <SafeAreaInsetsContext.Provider value={regionInsets}>
-          {style === undefined ? children : <View style={style}>{children}</View>}
-        </SafeAreaInsetsContext.Provider>
+        <RegionEdgesContext.Provider value={regionEdges}>
+          <SafeAreaInsetsContext.Provider value={regionInsets}>
+            {style === undefined ? children : <View style={style}>{children}</View>}
+          </SafeAreaInsetsContext.Provider>
+        </RegionEdgesContext.Provider>
       </TopBandContext.Provider>
     </WindowSafeAreaInsetsContext.Provider>
   );

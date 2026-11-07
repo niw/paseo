@@ -20,7 +20,7 @@ export function useExplorerGeometry({
   onResize,
 }: ExplorerGeometryInput): ExplorerGeometry {
   const insets = useSafeAreaInsets();
-  // The panel's top row is its tab row: it shares a shareable top band.
+  // The panel's top row is its tab row: it shares a shareable top band and clears the corners.
   const overlayTopPadding = overlay ? HEADER_TOP_PADDING_MOBILE : 0;
   const topChrome = useTopChromeInsets(WORKSPACE_SECONDARY_HEADER_HEIGHT + overlayTopPadding);
   const resizeWidth = useSharedValue(width);
