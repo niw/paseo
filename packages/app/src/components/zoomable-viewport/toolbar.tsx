@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Pressable, View } from "react-native";
 import { Scan, ZoomIn, ZoomOut } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -9,6 +9,8 @@ import {
   iconButtonChromeStyle,
 } from "@/components/ui/icon-button-chrome";
 import type { ZoomableViewportAction } from "./types";
+import { SPACING } from "@/styles/theme";
+import { useWindowChromeCornerInsets } from "@/utils/desktop-window";
 
 interface ViewportToolbarProps {
   actions: ZoomableViewportAction[];
@@ -36,6 +38,13 @@ export const ViewportToolbar = React.memo(function ViewportToolbar({
   visible,
 }: ViewportToolbarProps) {
   const { t } = useTranslation();
+  // At the top of a full-window viewer, like the image lightbox, the cluster clears the window's
+  // top-right corner. Inside a pane it owns no corner.
+  const cornerInsets = useWindowChromeCornerInsets();
+  const clusterStyle = useMemo(
+    () => [styles.cluster, { right: SPACING[2] + cornerInsets.right }],
+    [cornerInsets.right],
+  );
   const viewportActions: ResolvedViewportAction[] = [
     {
       icon: ZoomIn,
@@ -59,7 +68,7 @@ export const ViewportToolbar = React.memo(function ViewportToolbar({
   ];
 
   return (
-    <View style={styles.cluster} testID="zoomable-viewport-toolbar">
+    <View style={clusterStyle} testID="zoomable-viewport-toolbar">
       {viewportActions.map((action) => (
         <ViewportToolbarButton
           key={action.label}

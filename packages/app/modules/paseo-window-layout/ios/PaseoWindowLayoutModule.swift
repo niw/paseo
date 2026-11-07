@@ -25,6 +25,11 @@ final class WindowLayoutView: ExpoView {
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     isUserInteractionEnabled = false
+    if #available(iOS 26.0, *) {
+      // The probe fills the window, so a concentric corner resolves to the display corner it
+      // sits in.
+      cornerConfiguration = .corners(radius: .containerConcentric())
+    }
     #if compiler(>=6.4)
     if #available(iOS 27.1, *) {
       registerForTraitChanges(UITraitCollection.systemTraitsAffectingVerticalBarEdge) {
@@ -129,6 +134,7 @@ final class WindowLayoutView: ExpoView {
     let payload: [String: Any] = [
       "bounds": rect(bounds),
       "statusBar": statusBar,
+      "cornerRadii": cornerRadii() ?? NSNull(),
       "verticalBarEdge": barEdge,
       "verticalBar": barPayload,
       "bottomClearance": bottomClearance,
@@ -139,6 +145,18 @@ final class WindowLayoutView: ExpoView {
     guard !NSDictionary(dictionary: payload).isEqual(to: previousPayload ?? [:]) else { return }
     previousPayload = payload
     onGeometryChange(payload)
+  }
+
+  /// The radius of each window corner, which differs per corner: iPhone Duo folded has 8pt
+  /// corners on the hinge side and 59pt on the other.
+  private func cornerRadii() -> [String: CGFloat]? {
+    guard #available(iOS 26.0, *) else { return nil }
+    return [
+      "topLeft": effectiveRadius(corner: .topLeft),
+      "topRight": effectiveRadius(corner: .topRight),
+      "bottomLeft": effectiveRadius(corner: .bottomLeft),
+      "bottomRight": effectiveRadius(corner: .bottomRight)
+    ]
   }
 
   private func rect(_ frame: CGRect) -> [String: CGFloat] {
