@@ -1337,7 +1337,9 @@ function ChatSurface({
 }) {
   return (
     <FileDropZone style={styles.container} disabled={disabled}>
-      <ComposerDock fullscreen={fullscreen}>{children}</ComposerDock>
+      <ComposerDock fullscreen={fullscreen} contentUnderComposer>
+        {children}
+      </ComposerDock>
     </FileDropZone>
   );
 }

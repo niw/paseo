@@ -1,7 +1,8 @@
 # Safe area
 
-Backgrounds and read-only content run edge to edge: chat text, the terminal grid and file text can
-sit under a side inset. Controls stay inside the safe-area insets on all four sides: buttons,
+Backgrounds and read-only content run edge to edge: the terminal grid and file text can sit under a
+side inset. Chat rows are the exception: they share the composer's column, so the chat scrolls edge
+to edge but its text lines up with the composer. Controls stay inside the safe-area insets on all four sides: buttons,
 inputs, pickers, list rows you tap, and the keys of the terminal key bar. Rules, like borders and
 separators, are part of the background and reach the edge too.
 
@@ -54,6 +55,8 @@ A sidebar or explorer that takes an inset grows by it, so its rows keep their wi
   inline padding so its bottom border still reaches the edge.
 - The composer dock's content runs under the side insets; the controls in it inset themselves, like
   the compact New workspace pickers and the draft tab's setup fields.
+  The chat's rows take the composer's column: inside the insets, centered where the composer
+  centers once they reach `contentMaxWidth`, so no gap opens on the far side of an inset.
 - Pad a scroll view of controls through its content container, or give it margins when its style
   already sets horizontal padding. `paddingLeft` replaces `paddingHorizontal`; it doesn't add to it.
 - Inset an absolutely positioned control with offsets on its layer. Absolute children ignore their

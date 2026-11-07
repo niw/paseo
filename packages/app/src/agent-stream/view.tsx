@@ -1,4 +1,5 @@
 import { ChatFind, ChatFindExpansion } from "@/agent-stream/chat-find";
+import { useStreamBottomOverlayInset } from "./bottom-overlay";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import React, {
@@ -1062,18 +1063,26 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     }, [baseRenderModel, pendingPermissionsNode, turnFooterNode]);
 
     const emptyStateStyle = useMemo(() => [stylesheet.emptyState, stylesheet.contentWrapper], []);
-    // The stream runs under the side insets; the button centers between them.
+    // The stream runs under the side insets and behind the composer; the button centers between
+    // the insets and sits above the composer.
     const safeAreaInsets = useSafeAreaInsets();
+    const composerOverlayInset = useStreamBottomOverlayInset();
     const scrollToBottomContainerStyle = useMemo(
       () => [
         stylesheet.scrollToBottomContainer,
         {
-          bottom: resolveBottomOverlayControlOffset(bottomOverlayControlClearance),
+          bottom:
+            composerOverlayInset + resolveBottomOverlayControlOffset(bottomOverlayControlClearance),
           left: safeAreaInsets.left,
           right: safeAreaInsets.right,
         },
       ],
-      [bottomOverlayControlClearance, safeAreaInsets.left, safeAreaInsets.right],
+      [
+        bottomOverlayControlClearance,
+        composerOverlayInset,
+        safeAreaInsets.left,
+        safeAreaInsets.right,
+      ],
     );
     const listEmptyComponent = useMemo(
       () =>

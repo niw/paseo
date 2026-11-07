@@ -18,6 +18,8 @@ import {
   type ViewStyle,
 } from "react-native";
 import { withUnistyles } from "react-native-unistyles";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useStreamBottomOverlayInset } from "./bottom-overlay";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { StreamItem } from "@/types/stream";
 import type { Theme } from "@/styles/theme";
@@ -284,33 +286,42 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       ? undefined
       : DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION;
   const topOverlayInset = useStreamTopOverlayInset();
-  // The list is inverted, so its content's bottom padding is the visual top.
+  const bottomOverlayInset = useStreamBottomOverlayInset();
+  // The list scrolls edge to edge, under the side insets, but its rows share the composer's column:
+  // inside the insets, centered where the composer centers once they reach their maximum width.
+  const { left: sideInsetMarginLeft, right: sideInsetMarginRight } = useSafeAreaInsets();
+  // The list is inverted, so its content's bottom padding is the visual top and its top padding
+  // is the visual bottom, where the composer floats over the stream.
   const listContentContainerStyle = useMemo(
     () => [
       baseListContentContainerStyle,
       {
+        marginLeft: sideInsetMarginLeft,
+        marginRight: sideInsetMarginRight,
+        paddingTop: bottomOverlayInset,
         paddingBottom: streamKeyboardInset.contentContainerPaddingBottom + topOverlayInset,
       },
     ],
     [
       baseListContentContainerStyle,
+      bottomOverlayInset,
+      sideInsetMarginLeft,
+      sideInsetMarginRight,
       streamKeyboardInset.contentContainerPaddingBottom,
       topOverlayInset,
     ],
   );
-  const listInsetProps = useMemo(
-    () =>
-      streamKeyboardInset.contentInset
-        ? {
-            automaticallyAdjustContentInsets: false,
-            automaticallyAdjustsScrollIndicatorInsets: false,
-            contentInsetAdjustmentBehavior: "never" as const,
-            contentInset: streamKeyboardInset.contentInset,
-            scrollIndicatorInsets: streamKeyboardInset.contentInset,
-          }
-        : {},
-    [streamKeyboardInset.contentInset],
-  );
+  const listInsetProps = useMemo(() => {
+    const contentInset = streamKeyboardInset.contentInset;
+    if (!contentInset && bottomOverlayInset === 0) return {};
+    return {
+      automaticallyAdjustContentInsets: false,
+      automaticallyAdjustsScrollIndicatorInsets: false,
+      contentInsetAdjustmentBehavior: "never" as const,
+      ...(contentInset ? { contentInset } : {}),
+      scrollIndicatorInsets: { ...contentInset, top: bottomOverlayInset },
+    };
+  }, [bottomOverlayInset, streamKeyboardInset.contentInset]);
 
   useEffect(() => {
     streamViewportMetricsRef.current = {
