@@ -3294,10 +3294,7 @@ function WorkspaceScreenContent({
           />
         ) : null}
         {workspaceDirectory ? (
-          <>
-            <WorkspaceActions serverId={normalizedServerId} cwd={workspaceDirectory} />
-            {workspaceActionsInBar ? null : explorerControls.headerAction}
-          </>
+          <WorkspaceActions serverId={normalizedServerId} cwd={workspaceDirectory} />
         ) : null}
       </View>
     ),
@@ -3311,9 +3308,17 @@ function WorkspaceScreenContent({
       scriptActions,
       handleViewScriptTerminal,
       handleOpenUrlInBrowserTab,
-      explorerControls.headerAction,
-      workspaceActionsInBar,
     ],
+  );
+  // The explorer toggle stays on the header's first row, beside the title, when the other
+  // actions move to a second row.
+  const headerExplorerAction = explorerControls.headerAction;
+  const headerTrailing = useMemo(
+    () =>
+      workspaceDirectory && !workspaceActionsInBar && headerExplorerAction ? (
+        <View style={styles.headerExplorerToggle}>{headerExplorerAction}</View>
+      ) : null,
+    [workspaceDirectory, headerExplorerAction, workspaceActionsInBar],
   );
 
   const showScreenHeader = useMemo(
@@ -3372,6 +3377,7 @@ function WorkspaceScreenContent({
             </>
           }
           right={headerRight}
+          trailing={headerTrailing}
         />
       ) : null,
     [
@@ -3381,6 +3387,7 @@ function WorkspaceScreenContent({
       handleCopyWorkspacePath,
       handleOpenSetupTab,
       headerRight,
+      headerTrailing,
       isWorkspaceHeaderLoading,
       normalizedServerId,
       openImportSheet,
@@ -4012,6 +4019,13 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: {
+      xs: theme.spacing[1],
+      md: theme.spacing[2],
+    },
+  },
+  headerExplorerToggle: {
+    // The header's actions keep this gap to it on either row.
+    marginLeft: {
       xs: theme.spacing[1],
       md: theme.spacing[2],
     },
