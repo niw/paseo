@@ -1,5 +1,4 @@
 import { useCallback, useMemo, type ReactNode } from "react";
-import { useTopChromeInsets } from "@/components/safe-area-edges";
 import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { router } from "expo-router";
@@ -18,6 +17,7 @@ import {
   HEADER_INNER_HEIGHT_MOBILE,
   HEADER_TOP_PADDING_MOBILE,
 } from "@/constants/layout";
+import { useTopChromeInsets, useWindowChromeCornerInsets } from "@/utils/desktop-window";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 
 const ThemedArrowLeft = withUnistyles(ArrowLeft);
@@ -58,22 +58,31 @@ export function CompactHeader({
   actions,
 }: CompactHeaderProps) {
   const insets = useSafeAreaInsets();
-  // Beside an occluded corner the row shares the top inset instead of sitting below it.
+  // Beside an occluded corner the row shares the top inset instead of sitting below it, and its
+  // ends clear the window's top corners.
   const topChrome = useTopChromeInsets(
     inDesktopTitlebar
       ? HEADER_INNER_HEIGHT
       : HEADER_INNER_HEIGHT_MOBILE + HEADER_TOP_PADDING_MOBILE,
   );
+  const cornerInsets = useWindowChromeCornerInsets();
   const rootStyle = useMemo(
     () => [
       styles.root,
       {
         paddingTop: topChrome.paddingTop + (inDesktopTitlebar ? 0 : HEADER_TOP_PADDING_MOBILE),
-        marginLeft: insets.left + topChrome.paddingLeft,
-        marginRight: insets.right + topChrome.paddingRight,
+        marginLeft: insets.left + cornerInsets.left,
+        marginRight: insets.right + cornerInsets.right,
       },
     ],
-    [inDesktopTitlebar, insets.left, insets.right, topChrome],
+    [
+      cornerInsets.left,
+      cornerInsets.right,
+      inDesktopTitlebar,
+      insets.left,
+      insets.right,
+      topChrome.paddingTop,
+    ],
   );
 
   return (
