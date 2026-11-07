@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePaddedSideInsets } from "@/components/padded-side-insets";
 import type { ComponentProps, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -26,6 +27,7 @@ import {
   type ContextBridge,
   useIsolatedBottomSheetVisibility,
 } from "@/components/ui/isolated-bottom-sheet-modal";
+import { SPACING } from "@/styles/theme";
 import { getCompactSheetSafeAreaPadding } from "@/components/adaptive-modal-sheet-layout";
 import { ScrollView } from "@/components/ui/scroll-view";
 import { isWeb } from "@/constants/platform";
@@ -394,6 +396,20 @@ export function SheetHeaderView({
     () => [styles.title, { color: theme.colors.foreground }],
     [theme.colors.foreground],
   );
+  // The header's rules reach the sheet's edges past its side insets; its controls stay inside.
+  const sheetInsets = usePaddedSideInsets();
+  const headerContainerStyle = useMemo(
+    () => [
+      styles.headerContainer,
+      {
+        marginLeft: -sheetInsets.left,
+        marginRight: -sheetInsets.right,
+        paddingLeft: sheetInsets.left,
+        paddingRight: sheetInsets.right,
+      },
+    ],
+    [sheetInsets.left, sheetInsets.right],
+  );
   const back = header.back;
   const handleBackPress = back?.onPress;
   const search = header.search;
@@ -405,7 +421,7 @@ export function SheetHeaderView({
   );
 
   return (
-    <View style={styles.headerContainer} testID={testID}>
+    <View style={headerContainerStyle} testID={testID}>
       <View style={styles.headerRow}>
         {handleBackPress ? (
           <Pressable
@@ -465,6 +481,20 @@ export function SheetHeaderView({
 export function InlineHeaderView({ header }: { header: SheetHeader }) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
+  // The search row's rule reaches the sheet's edges past its side insets.
+  const sheetInsets = usePaddedSideInsets();
+  const searchRowStyle = useMemo(
+    () => [
+      styles.inlineSearchRow,
+      {
+        marginLeft: -sheetInsets.left,
+        marginRight: -sheetInsets.right,
+        paddingLeft: theme.spacing[3] + sheetInsets.left,
+        paddingRight: theme.spacing[3] + sheetInsets.right,
+      },
+    ],
+    [sheetInsets.left, sheetInsets.right, theme.spacing],
+  );
   const back = header.back;
   const handleBackPress = back?.onPress;
   const hasInlineRow = Boolean(handleBackPress || header.leading || header.actions);
@@ -500,7 +530,7 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
         </View>
       ) : null}
       {header.search ? (
-        <View style={styles.inlineSearchRow}>
+        <View style={searchRowStyle}>
           <Search size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
           <AdaptiveTextInput
             // @ts-expect-error - outlineStyle is web-only
@@ -532,7 +562,22 @@ export function SheetFooter({
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
-  return <View style={[styles.footer, style]}>{children}</View>;
+  // The top border reaches the sheet's edges past its side insets; the actions stay inside.
+  const sheetInsets = usePaddedSideInsets();
+  const footerStyle = useMemo(
+    () => [
+      styles.footer,
+      {
+        marginLeft: -sheetInsets.left,
+        marginRight: -sheetInsets.right,
+        paddingLeft: SPACING[SHEET_HORIZONTAL_PADDING_SCALE] + sheetInsets.left,
+        paddingRight: SPACING[SHEET_HORIZONTAL_PADDING_SCALE] + sheetInsets.right,
+      },
+      style,
+    ],
+    [sheetInsets.left, sheetInsets.right, style],
+  );
+  return <View style={footerStyle}>{children}</View>;
 }
 
 export interface AdaptiveModalSheetProps {

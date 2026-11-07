@@ -32,6 +32,7 @@ import { PluginCommandCenterActions } from "@/plugins/command-center/registratio
 import { AddProjectFlowHost } from "@/components/add-project-flow-host";
 import { WorktreeSetupCalloutSource } from "@/components/worktree-setup-callout-source";
 import { DownloadToast } from "@/components/download-toast";
+import { HorizontalSafeAreaRegion } from "@/components/safe-area-edges";
 import { QuittingOverlay } from "@/components/quitting-overlay";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { ChangelogHost } from "@/changelog";
@@ -363,6 +364,7 @@ export function useHostRuntimeBootstrapState(): HostRuntimeBootstrapState {
 
 const rowStyle = { flex: 1, flexDirection: "row" } as const;
 const flexStyle = { flex: 1 } as const;
+const SIDEBAR_SAFE_AREA_EDGES = { left: true, right: false } as const;
 const MOBILE_WEB_GESTURE_TOUCH_ACTION = isWeb ? "auto" : "pan-y";
 
 interface AppContainerProps {
@@ -468,23 +470,29 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   if (isWeb) {
     themedSidebarChrome = <AppearanceStyleBoundary>{sidebarChrome}</AppearanceStyleBoundary>;
   }
-  const workspaceChromeStyle = useMemo(
-    () => [rowStyle, !isCompactLayout && { paddingLeft: insets.left, paddingRight: insets.right }],
-    [insets.left, insets.right, isCompactLayout],
+  // The row draws edge to edge. The sidebar and the content each take the horizontal safe-area
+  // inset of the window edge they touch and keep their own controls inside it.
+  const contentSafeAreaEdges = useMemo(
+    () => ({ left: isCompactLayout || !desktopSidebarVisible, right: true }),
+    [desktopSidebarVisible, isCompactLayout],
   );
   const workspaceChrome = (
-    <View style={workspaceChromeStyle}>
+    <View style={rowStyle}>
       <WorkspaceLayoutModePublisher />
       {!isCompactLayout ? (
         <WindowChromeRegion corners={appChromeLayout.sidebarCorners}>
-          {themedSidebarChrome}
+          <HorizontalSafeAreaRegion edges={SIDEBAR_SAFE_AREA_EDGES}>
+            {themedSidebarChrome}
+          </HorizontalSafeAreaRegion>
         </WindowChromeRegion>
       ) : null}
       <WorkspaceExplorerOpenGesture enabled={chromeEnabled && isCompactLayout}>
         <WindowChromeRegion
           corners={isCompactLayout && chromeEnabled ? "both" : appChromeLayout.contentCorners}
         >
-          <View style={flexStyle}>{children}</View>
+          <HorizontalSafeAreaRegion edges={contentSafeAreaEdges} style={flexStyle}>
+            {children}
+          </HorizontalSafeAreaRegion>
         </WindowChromeRegion>
       </WorkspaceExplorerOpenGesture>
     </View>

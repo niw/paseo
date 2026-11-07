@@ -1,4 +1,5 @@
 import { useCallback, useMemo, type ReactNode } from "react";
+import { useTopChromeInsets } from "@/components/safe-area-edges";
 import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { router } from "expo-router";
@@ -51,16 +52,18 @@ export function CompactHeader({
   actions,
 }: CompactHeaderProps) {
   const insets = useSafeAreaInsets();
+  // Beside an occluded corner the row shares the top inset instead of sitting below it.
+  const topChrome = useTopChromeInsets(HEADER_INNER_HEIGHT_MOBILE + HEADER_TOP_PADDING_MOBILE);
   const rootStyle = useMemo(
     () => [
       styles.root,
       {
-        paddingTop: insets.top + HEADER_TOP_PADDING_MOBILE,
-        marginLeft: insets.left,
-        marginRight: insets.right,
+        paddingTop: topChrome.paddingTop + HEADER_TOP_PADDING_MOBILE,
+        marginLeft: insets.left + topChrome.paddingLeft,
+        marginRight: insets.right + topChrome.paddingRight,
       },
     ],
-    [insets.top, insets.left, insets.right],
+    [insets.left, insets.right, topChrome],
   );
 
   return (

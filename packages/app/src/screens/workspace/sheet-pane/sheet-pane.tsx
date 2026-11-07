@@ -18,6 +18,7 @@ import {
   SheetHeaderView,
   type SheetHeader,
 } from "@/components/adaptive-modal-sheet";
+import { SheetFullBleedRegion } from "@/components/ui/isolated-bottom-sheet-modal";
 import type { PanelIconProps } from "@/panels/panel-registry";
 import { getPanelRegistration } from "@/panels/panel-registry";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
@@ -133,18 +134,22 @@ export function SheetPane({ sheet, onClose, onBack, opener = null, isTop }: Shee
         <SheetDragArea>
           <SheetHeaderView header={header} onClose={onClose} testID="sheet-tab-header" />
         </SheetDragArea>
-        <SheetBottomInset
-          style={styles.body}
-          role="dialog"
-          aria-label={descriptor.label}
-          testID="sheet-tab-body"
-        >
-          <WorkspacePaneContent
-            content={content}
-            isWorkspaceFocused={host.isWorkspaceFocused}
-            isPaneFocused={isPaneFocused}
-          />
-        </SheetBottomInset>
+        {/* The pane runs to the sheet's edges and keeps its controls inside the side insets,
+            as it does in a tab. */}
+        <SheetFullBleedRegion style={styles.body}>
+          <SheetBottomInset
+            style={styles.body}
+            role="dialog"
+            aria-label={descriptor.label}
+            testID="sheet-tab-body"
+          >
+            <WorkspacePaneContent
+              content={content}
+              isWorkspaceFocused={host.isWorkspaceFocused}
+              isPaneFocused={isPaneFocused}
+            />
+          </SheetBottomInset>
+        </SheetFullBleedRegion>
       </View>
     </SheetPaneExitContext.Provider>
   );

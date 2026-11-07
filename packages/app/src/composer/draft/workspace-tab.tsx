@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Keyboard, ScrollView, StyleSheet as RNStyleSheet, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
@@ -600,6 +601,15 @@ export function WorkspaceDraftAgentTab({
     }),
     [composerState.agentControls, handleDropdownCloseFocus, isSubmitting],
   );
+  // The setup fields are controls, so they stay inside the side insets the dock content runs under.
+  const safeAreaInsets = useSafeAreaInsets();
+  const configScrollStyle = useMemo(
+    () => [
+      styles.scrollView,
+      { marginLeft: safeAreaInsets.left, marginRight: safeAreaInsets.right },
+    ],
+    [safeAreaInsets.left, safeAreaInsets.right],
+  );
   const dockContent = (
     <View style={styles.contentContainer}>
       {isSubmitting && draftAgent ? (
@@ -616,7 +626,7 @@ export function WorkspaceDraftAgentTab({
           />
         </View>
       ) : (
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.configScrollContent}>
+        <ScrollView style={configScrollStyle} contentContainerStyle={styles.configScrollContent}>
           <View style={styles.configSection}>
             {formErrorMessage ? (
               <View style={styles.errorContainer}>

@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { PaddedSideInsetsView, useFullBleedStyle } from "@/components/padded-side-insets";
 import {
   CircleGauge,
   FolderPlus,
@@ -20,6 +21,7 @@ import { Gesture } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTopChromeInsets, useWindowSafeAreaInsets } from "@/components/safe-area-edges";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { SidebarCloseButton } from "@/components/headers/sidebar-close-button";
@@ -234,6 +236,9 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
     labels,
   };
 
+  // The sidebar's first row lines up with a header row that shares the top inset.
+  const desktopTopChrome = useTopChromeInsets(HEADER_INNER_HEIGHT);
+
   if (isCompactLayout) {
     return (
       <>
@@ -261,7 +266,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
       <RetainedPanelActivity active={active}>
         <DesktopSidebar
           {...sharedProps}
-          insetsTop={insets.top}
+          insetsTop={desktopTopChrome.paddingTop}
           active={active}
           handleOpenProject={handleOpenProjectDesktop}
           handleImportSession={openImportSession}
@@ -423,10 +428,16 @@ function SidebarFooter({
   const newAgentKeys = useShortcutKeys("new-agent");
   const settingsKeys = useShortcutKeys("toggle-settings");
 
+  // The footer's top rule reaches the sidebar's edges past a side inset.
+  const fullBleedStyle = useFullBleedStyle();
+  const footerContainerStyle = useMemo(
+    () => [styles.footerContainer, fullBleedStyle],
+    [fullBleedStyle],
+  );
   // One line of icons: Add project, Usage, Hosts, then Help and Settings at the end.
   return (
     <UsageSidebarRoot>
-      <View style={styles.footerContainer} testID="sidebar-footer">
+      <View style={footerContainerStyle} testID="sidebar-footer">
         <SidebarFooterRows onBeforeNavigate={onBeforeNavigate} />
         <View style={styles.sidebarFooter} testID="sidebar-footer-bottom-line">
           <FooterIconButton
@@ -551,6 +562,9 @@ function MobileSidebar({
     [labels.closeSidebar, closeSidebar],
   );
 
+  // The overlay covers the whole window, so it keeps its rows inside every inset; its rules still
+  // reach the edges.
+  const { left: insetsLeft, right: insetsRight } = useSafeAreaInsets();
   const mobileSidebarInsetStyle = useMemo(
     () => ({
       paddingTop: insetsTop,
@@ -559,6 +573,10 @@ function MobileSidebar({
     }),
     [insetsTop, insetsBottom, theme.colors.surfaceSidebar],
   );
+  const mobilePaddedInsets = useMemo(
+    () => ({ left: insetsLeft, right: insetsRight }),
+    [insetsLeft, insetsRight],
+  );
 
   return (
     <MobilePanelOverlay
@@ -566,7 +584,11 @@ function MobileSidebar({
       closeGesture={closeGesture}
       panelStyle={mobileSidebarInsetStyle}
     >
-      <View style={styles.sidebarContent} pointerEvents="auto">
+      <PaddedSideInsetsView
+        style={styles.sidebarContent}
+        insets={mobilePaddedInsets}
+        pointerEvents="auto"
+      >
         <WindowChromeSafeArea placement="below" />
         <SidebarNavRows
           style={styles.sidebarHeaderGroup}
@@ -608,7 +630,7 @@ function MobileSidebar({
           handleOpenHostSettings={handleOpenHostSettings}
           onBeforeNavigate={closeSidebar}
         />
-      </View>
+      </PaddedSideInsetsView>
     </MobilePanelOverlay>
   );
 }
@@ -644,8 +666,12 @@ function DesktopSidebar({
   const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
   const setSidebarWidth = usePanelStore((state) => state.setSidebarWidth);
   const { width: windowWidth } = useWindowDimensions();
+  // The shell hands this sidebar only the left edge's inset. The viewport is measured against
+  // the whole window, and the sidebar grows by its inset so its rows keep their width beside a
+  // camera strip.
   const insets = useSafeAreaInsets();
-  const viewportWidth = windowWidth - insets.left - insets.right;
+  const windowInsets = useWindowSafeAreaInsets();
+  const viewportWidth = windowWidth - windowInsets.left - windowInsets.right;
   const visibleSidebarWidth = resolveDesktopSidebarWidth({
     requestedWidth: sidebarWidth,
     viewportWidth,
@@ -701,8 +727,9 @@ function DesktopSidebar({
     ],
   );
 
+  const insetLeft = insets.left;
   const resizeAnimatedStyle = useAnimatedStyle(() => ({
-    width: resizeWidth.value,
+    width: resizeWidth.value + insetLeft,
   }));
 
   const desktopSidebarStyle = useMemo(
@@ -720,6 +747,8 @@ function DesktopSidebar({
     ],
     [insetsTop, insets.bottom],
   );
+  // The sidebar keeps its rows clear of the left edge's inset; its rules still reach the edge.
+  const desktopPaddedInsets = useMemo(() => ({ left: insets.left, right: 0 }), [insets.left]);
   const sidebarHeaderGroupStyle = useMemo(
     () => [styles.sidebarHeaderGroup, ownsTopLeft && styles.sidebarHeaderGroupBelowChrome],
     [ownsTopLeft],
@@ -731,7 +760,7 @@ function DesktopSidebar({
       pointerEvents={active ? "auto" : "none"}
       style={desktopSidebarStyle}
     >
-      <View style={desktopSidebarBorderStyle}>
+      <PaddedSideInsetsView style={desktopSidebarBorderStyle} insets={desktopPaddedInsets}>
         <View style={styles.sidebarDragArea}>
           {ownsTopLeft || DEV_BUILD_LABEL ? (
             <View style={styles.desktopChromeRow}>
@@ -797,7 +826,7 @@ function DesktopSidebar({
           pressed={resizePressed}
           testID="left-sidebar-resize-handle"
         />
-      </View>
+      </PaddedSideInsetsView>
     </Animated.View>
   );
 }

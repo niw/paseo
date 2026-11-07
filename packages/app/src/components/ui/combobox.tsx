@@ -1,4 +1,5 @@
 import { Modal } from "@/components/ui/modal";
+import { useFullBleedStyle } from "@/components/padded-side-insets";
 import {
   useCallback,
   useEffect,
@@ -25,11 +26,12 @@ import {
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useWindowSafeAreaInsets } from "@/components/safe-area-edges";
 import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useRetainedPanelActive } from "@/components/retained-panel";
-import { BottomSheetScrollView, type BottomSheetBackgroundProps } from "@gorhom/bottom-sheet";
+import { type BottomSheetBackgroundProps } from "@gorhom/bottom-sheet";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Check, File, Folder, Search } from "lucide-react-native";
@@ -51,6 +53,7 @@ import type { ComboboxOptionModel } from "./combobox-options";
 import { isWeb } from "@/constants/platform";
 import {
   IsolatedBottomSheetModal,
+  SheetScrollView,
   SheetVisibleFrame,
   useIsolatedBottomSheetVisibility,
 } from "./isolated-bottom-sheet-modal";
@@ -403,6 +406,9 @@ interface DesktopPositionInput {
   windowWidth: number;
   windowHeight: number;
   collisionPadding: number;
+  /** The window's side safe-area insets, added to the collision padding on those sides. */
+  safeAreaLeft: number;
+  safeAreaRight: number;
   floatingTop: number | null;
   floatingLeft: number | null;
   floatingStyles: ReturnType<typeof useFloating>["floatingStyles"];
@@ -459,6 +465,8 @@ function computeDesktopPosition(input: DesktopPositionInput): DesktopPositionRes
     windowWidth,
     windowHeight,
     collisionPadding,
+    safeAreaLeft,
+    safeAreaRight,
     floatingLeft,
     floatingStyles,
     desktopPreventInitialFlash,
@@ -473,8 +481,11 @@ function computeDesktopPosition(input: DesktopPositionInput): DesktopPositionRes
   const clampedMeasuredTopStartLeft =
     useMeasuredTopStartPosition && referenceLeft !== null && desktopContentWidth !== null
       ? Math.max(
-          collisionPadding,
-          Math.min(windowWidth - desktopContentWidth - collisionPadding, referenceLeft),
+          collisionPadding + safeAreaLeft,
+          Math.min(
+            windowWidth - desktopContentWidth - collisionPadding - safeAreaRight,
+            referenceLeft,
+          ),
         )
       : null;
   const measuredTopStartBottom =
@@ -843,6 +854,8 @@ function maybePinDesktopOptionsToBottom(
 
 interface FloatingMiddlewareInput {
   collisionPadding: number;
+  safeAreaLeft: number;
+  safeAreaRight: number;
   isDesktopAboveSearch: boolean;
   setAvailableSize: FloatingSizeSetters["setAvailableSize"];
   setReferenceWidth: FloatingSizeSetters["setReferenceWidth"];
@@ -850,12 +863,19 @@ interface FloatingMiddlewareInput {
 
 function buildFloatingMiddleware(input: FloatingMiddlewareInput) {
   const { collisionPadding, isDesktopAboveSearch, setAvailableSize, setReferenceWidth } = input;
+  // Keep the popover clear of a side camera strip as well as the window edges.
+  const padding = {
+    top: collisionPadding,
+    bottom: collisionPadding,
+    left: collisionPadding + input.safeAreaLeft,
+    right: collisionPadding + input.safeAreaRight,
+  };
   return [
     floatingOffset(isWeb ? 5 : 4),
-    ...(isWeb ? [] : [flip({ padding: collisionPadding })]),
-    ...(isDesktopAboveSearch ? [] : [shift({ padding: collisionPadding })]),
+    ...(isWeb ? [] : [flip({ padding })]),
+    ...(isDesktopAboveSearch ? [] : [shift({ padding })]),
     floatingSize({
-      padding: collisionPadding,
+      padding,
       apply({ availableWidth, availableHeight, rects }) {
         updateAvailableSize(setAvailableSize, availableWidth, availableHeight);
         updateReferenceWidth(setReferenceWidth, rects.reference.width);
@@ -1016,7 +1036,7 @@ function MobileComboboxSheet(props: MobileBodyProps): ReactElement {
         {props.hasChildren && !props.mobileChildrenScrollEnabled ? (
           body
         ) : (
-          <BottomSheetScrollView
+          <SheetScrollView
             style={styles.mobileSheetBody}
             contentContainerStyle={[
               styles.comboboxScrollContent,
@@ -1026,7 +1046,7 @@ function MobileComboboxSheet(props: MobileBodyProps): ReactElement {
             showsVerticalScrollIndicator={false}
           >
             {body}
-          </BottomSheetScrollView>
+          </SheetScrollView>
         )}
       </ComboboxSheetFrame>
     </IsolatedBottomSheetModal>
@@ -1043,9 +1063,11 @@ function ComboboxSheetFrame({ footer, children }: { footer?: ReactNode; children
     () => [styles.mobileSheetFrame, { paddingBottom: footer ? 0 : safeAreaBottom }],
     [footer, safeAreaBottom],
   );
+  // The footer's top border reaches the sheet's edges; its content stays inside the side insets.
+  const fullBleedStyle = useFullBleedStyle();
   const footerStyle = useMemo(
-    () => [styles.footer, { paddingBottom: safeAreaBottom }],
-    [safeAreaBottom],
+    () => [styles.footer, fullBleedStyle, { paddingBottom: safeAreaBottom }],
+    [fullBleedStyle, safeAreaBottom],
   );
   const footerView = useMemo(
     () => (footer ? <View style={footerStyle}>{footer}</View> : undefined),
@@ -1378,16 +1400,19 @@ export function Combobox({
   useResetSearchOnOpen(isOpen, setSearchQueryWithCallback, bumpSearchResetKey);
 
   const collisionPadding = useMemo(computeCollisionPadding, []);
+  const { left: safeAreaLeft, right: safeAreaRight } = useWindowSafeAreaInsets();
 
   const middleware = useMemo(
     () =>
       buildFloatingMiddleware({
         collisionPadding,
+        safeAreaLeft,
+        safeAreaRight,
         isDesktopAboveSearch,
         setAvailableSize,
         setReferenceWidth,
       }),
-    [collisionPadding, isDesktopAboveSearch],
+    [collisionPadding, isDesktopAboveSearch, safeAreaLeft, safeAreaRight],
   );
 
   const { refs, floatingStyles, update } = useFloating({
@@ -1433,6 +1458,8 @@ export function Combobox({
     windowWidth,
     windowHeight,
     collisionPadding,
+    safeAreaLeft,
+    safeAreaRight,
     floatingTop,
     floatingLeft,
     floatingStyles,

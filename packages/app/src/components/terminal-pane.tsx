@@ -1,4 +1,5 @@
 import { TerminalFind, type TerminalPaneFindHandle } from "@/terminal/find";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { TerminalFindResult } from "@/terminal/runtime/terminal-emulator-runtime";
 import type { TerminalCharacterWidths } from "@/terminal/character-widths";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -1086,6 +1087,24 @@ export function TerminalPane({
     () => [styles.container, keyboardPaddingStyle],
     [keyboardPaddingStyle],
   );
+  // The output grid runs under the side safe-area insets like any content; the find bar, copy
+  // action and key bar are controls and stay inside them.
+  const safeAreaInsets = useSafeAreaInsets();
+  // Absolute overlays ignore padding, so their layer takes the insets as offsets.
+  const overlayInsetStyle = useMemo(
+    () => [styles.overlayInset, { left: safeAreaInsets.left, right: safeAreaInsets.right }],
+    [safeAreaInsets.left, safeAreaInsets.right],
+  );
+  const keyboardContainerStyle = useMemo(
+    () => [
+      styles.keyboardContainer,
+      {
+        paddingLeft: theme.spacing[2] + safeAreaInsets.left,
+        paddingRight: theme.spacing[2] + safeAreaInsets.right,
+      },
+    ],
+    [safeAreaInsets.left, safeAreaInsets.right, theme.spacing],
+  );
 
   const handleKeyBarLayout = useCallback((event: LayoutChangeEvent) => {
     const width = event.nativeEvent.layout.width;
@@ -1207,27 +1226,34 @@ export function TerminalPane({
           />
         </View>
 
-        <TerminalFind
-          key={terminalStreamKey}
-          ref={findRef}
-          terminal={emulatorRef}
-          active={
-            isTerminalPresented && isPaneFocused && rendererReadyStreamKey === terminalStreamKey
-          }
-          focusTerminal={requestTerminalFocus}
-        />
-
         {showLoadingOverlay ? (
-          <View style={styles.attachOverlay} pointerEvents="none" testID="terminal-attach-loading">
+          <View
+            style={styles.attachOverlay}
+            pointerEvents="none"
+            testID="terminal-attach-loading"
+          >
             <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
           </View>
         ) : null}
 
-        {showFloatingCopyAction ? (
-          <View pointerEvents="box-none" style={styles.floatingCopyContainer}>
-            <TerminalFloatingCopyAction hasSelection={hasSelection} onCopy={handleTerminalCopy} />
-          </View>
-        ) : null}
+        {/* The grid runs under the side insets; the find bar and copy action stay inside. */}
+        <View style={overlayInsetStyle} pointerEvents="box-none">
+          <TerminalFind
+            key={terminalStreamKey}
+            ref={findRef}
+            terminal={emulatorRef}
+            active={
+              isTerminalPresented && isPaneFocused && rendererReadyStreamKey === terminalStreamKey
+            }
+            focusTerminal={requestTerminalFocus}
+          />
+
+          {showFloatingCopyAction ? (
+            <View pointerEvents="box-none" style={styles.floatingCopyContainer}>
+              <TerminalFloatingCopyAction hasSelection={hasSelection} onCopy={handleTerminalCopy} />
+            </View>
+          ) : null}
+        </View>
       </FileDropZone>
 
       {streamError ? (
@@ -1239,7 +1265,7 @@ export function TerminalPane({
       ) : null}
 
       {showVirtualKeyBar ? (
-        <View style={styles.keyboardContainer} testID="terminal-virtual-keyboard">
+        <View style={keyboardContainerStyle} testID="terminal-virtual-keyboard">
           <View
             style={styles.keyboardRows}
             onLayout={handleKeyBarLayout}
@@ -1271,6 +1297,11 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 0,
     position: "relative",
     backgroundColor: theme.colors.background,
+  },
+  overlayInset: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
   },
   terminalGestureContainer: {
     flex: 1,

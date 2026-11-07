@@ -1,4 +1,6 @@
 import { useMemo, type ReactNode } from "react";
+import { usePaddedSideInsets } from "@/components/padded-side-insets";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Text,
   View,
@@ -31,8 +33,25 @@ export function PaneContentToolbar({
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }) {
+  // The pane's content runs under the side insets; its toolbar's border does too, and its
+  // controls stay inside them.
+  const { left, right } = useSafeAreaInsets();
+  const padded = usePaddedSideInsets();
+  const toolbarStyle = useMemo(
+    () => [
+      styles.toolbar,
+      style,
+      {
+        marginLeft: -padded.left,
+        marginRight: -padded.right,
+        paddingLeft: left + padded.left,
+        paddingRight: right + padded.right,
+      },
+    ],
+    [left, padded.left, padded.right, right, style],
+  );
   return (
-    <View style={[styles.toolbar, style]} testID={testID}>
+    <View style={toolbarStyle} testID={testID}>
       {children}
     </View>
   );

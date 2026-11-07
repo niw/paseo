@@ -36,7 +36,11 @@ export function PageLayout({
 }: PageLayoutProps) {
   const isCompact = useIsCompactFormFactor();
   const insets = useSafeAreaInsets();
-  const scrollContentStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
+  // The page scrolls edge to edge; its column stays inside the bottom and side insets.
+  const scrollContentStyle = useMemo(
+    () => ({ paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }),
+    [insets.bottom, insets.left, insets.right],
+  );
   const showTitle = !isCompact && title !== undefined;
 
   return (

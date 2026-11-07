@@ -272,9 +272,17 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
     });
   }
 
+  // Margins keep the column inside the side insets without replacing the container's padding.
   const scrollContentContainerStyle = useMemo(
-    () => [styles.container, { paddingBottom: theme.spacing[6] + insets.bottom }],
-    [theme.spacing, insets.bottom],
+    () => [
+      styles.container,
+      {
+        paddingBottom: theme.spacing[6] + insets.bottom,
+        marginLeft: insets.left,
+        marginRight: insets.right,
+      },
+    ],
+    [theme.spacing, insets.bottom, insets.left, insets.right],
   );
 
   return (
