@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   FileExplorerCloseGestureContext,
@@ -9,12 +9,8 @@ import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import { RetainedPanelActivity } from "@/components/retained-panel";
 import { resolveExplorerSidebarWidth } from "@/components/explorer-sidebar-layout";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import {
-  HorizontalSafeAreaRegion,
-  TopRowExtraInsetsProvider,
-  useTopChromeInsets,
-} from "@/components/safe-area-edges";
-import { HEADER_TOP_PADDING_MOBILE, WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
+import { HorizontalSafeAreaRegion } from "@/components/safe-area-edges";
+import { WindowChromeRegion } from "@/utils/desktop-window";
 import { useExplorerGeometry } from "./geometry";
 import type { ExplorerFrameProps } from "./frame-props";
 
@@ -47,14 +43,6 @@ function ExplorerFrameBase({
     resizeEnabled,
     onResize,
   });
-  // Only the tab row at the panel's top sits beside an occluded corner of a shared top band.
-  const topChrome = useTopChromeInsets(
-    WORKSPACE_SECONDARY_HEADER_HEIGHT + (overlay ? HEADER_TOP_PADDING_MOBILE : 0),
-  );
-  const topRowExtraInsets = useMemo(
-    () => ({ left: topChrome.paddingLeft, right: topChrome.paddingRight }),
-    [topChrome.paddingLeft, topChrome.paddingRight],
-  );
   return (
     <RetainedPanelActivity active={active}>
       <FileExplorerCloseGestureContext value={gestureRef}>
@@ -73,9 +61,11 @@ function ExplorerFrameBase({
             style={styles.content}
           >
             {resizeEnabled ? geometry.resizeHandle : null}
-            <TopRowExtraInsetsProvider value={topRowExtraInsets}>
+            {/* The panel's tab row sits in the window's top-right corner, and in both top corners
+                as an overlay. */}
+            <WindowChromeRegion corners={overlay ? "both" : "top-right"}>
               {children}
-            </TopRowExtraInsetsProvider>
+            </WindowChromeRegion>
           </HorizontalSafeAreaRegion>
         </MobilePanelOverlay>
       </FileExplorerCloseGestureContext>

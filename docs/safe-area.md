@@ -74,21 +74,55 @@ such a surface:
 Read these where the surface renders its content, not where it is declared: a sheet's content
 renders at the sheet host.
 
-## The top inset can be shared
+## Top rows
+
+### The top inset can be shared
 
 The safe-area insets only say how far each edge is covered, not by what. On iPhone Duo unfolded in
-portrait the top inset is 82pt, but only a 144pt camera and status block at the top-right corner
-covers it. `UIView.reservedRegions(kind: .occlusion)` (iOS 27.1) reports those blocks, and
+portrait the top inset is 82pt, but only a 144pt wide camera and status block at the top-right
+corner covers it. `UIView.reservedRegions(kind: .occlusion)` (iOS 27.1) reports those blocks, and
 `packages/app/modules/paseo-reserved-regions` passes them to JS with the status bar frame.
 
 `resolveTopBand` (`packages/app/src/components/top-band.ts`) decides whether the band is shareable:
 only when no status bar spans it, which is how an iPhone with a notch or Dynamic Island stays as it
-was. `useTopChromeInsets(rowHeight)` then replaces `insets.top` for a row at the top of a region:
-the header, the sidebars and the toast offset put their row at the bottom of the band, beside the
-occluded corners. Regions narrow the band's corners by edge, like the side insets.
+was. A shareable band is a list of obstacles, each covering one top corner.
 
-The explorer panel pads its own top, so only its tab row sits beside the corner:
-`TopRowExtraInsetsProvider` hands the band's corners to that row alone.
+### Top rows avoid the obstacles in their corners
+
+The rows at the top of a region form a stack, and the stack replaces `insets.top`
+(`resolveTopStackPadding`). It only clears the obstacles in the top corners it sits in: those its
+region owns (`WindowChromeRegion`) on window edges the region touches (`HorizontalSafeAreaRegion`).
+
+- A stack in no obstacle's corner starts at the window's top, like the left sidebar beside a block
+  at the top-right corner.
+- A stack as tall as the obstacle or taller starts at the window's top, and each row moves its ends
+  in past the obstacle beside it. The workspace header and its tab row both sit beside iPhone Duo's
+  block.
+- A shorter stack rests on the obstacle's bottom, beside it, so a single row leaves no gap below
+  the block.
+
+`TopChromeStack` (`packages/app/src/utils/desktop-window.tsx`) measures its rows. A row in it reads
+`useTopChromeRow()` for where it sits and how far its ends move in; `WindowChromeSafeArea` already
+does. `ScreenHeader` is a stack, and a stack inside another adds nothing, so the workspace column
+wraps its header and tab row in one stack. A single top row outside a stack takes
+`useTopChromeInsets(rowHeight)` for its top padding and `useWindowChromeCornerInsets()` for its ends.
+
+### The top corners belong to the window chrome
+
+A top row keeps its end controls clear of what covers the window's top corners. On desktop that is
+the window controls; on native it is the band's obstacles and the display's rounded corners, which
+reach a row where the top inset is 0, as on iPhone Duo with its camera strip on the side.
+`resolveTopRowClearance` moves the row's ends in by the obstacle's width beside the row, or by the
+depth of the corner's arc at the controls' height; the row keeps its height and position. The
+native module reads each corner's radius from a window-filling view with a container-concentric
+corner configuration (`effectiveRadius(corner:)`, iOS 26). The radii differ per corner: iPhone Duo
+folded has 8pt corners on the hinge side and 59pt on the other.
+
+A body below the top rows declares `WindowChromeRegion corners="none"`: the workspace panes below
+the header or the explorer's tab rail. Inside a stack, a row's position decides what it clears, so
+a header's second row, which owns no corner for the desktop window controls, still clears an
+obstacle beside it. A row nested in another top row, like the explorer's tab row in its rail,
+declares `corners="none"` so it doesn't move its ends in twice.
 
 ## Rules
 

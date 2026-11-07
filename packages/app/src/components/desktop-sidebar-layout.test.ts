@@ -39,7 +39,7 @@ describe("desktop sidebar layout", () => {
         sidebarControlsEnabled: true,
       }),
     ).toEqual({
-      sidebarCorners: "none",
+      sidebarCorners: "top-left",
       contentCorners: "both",
       sidebarToggleOwner: "content",
     });

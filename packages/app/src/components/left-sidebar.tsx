@@ -21,7 +21,7 @@ import { Gesture } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTopChromeInsets, useWindowSafeAreaInsets } from "@/components/safe-area-edges";
+import { useWindowSafeAreaInsets } from "@/components/safe-area-edges";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { SidebarCloseButton } from "@/components/headers/sidebar-close-button";
@@ -61,7 +61,12 @@ import { PluginSidebarItem } from "@/plugins/sidebar-items";
 import { builtinSidebarNavLabelKey } from "@/sidebar-nav/model";
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
 import { usePanelStore } from "@/stores/panel-store";
-import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop-window";
+import {
+  useHasOwnedWindowChromeObstruction,
+  WindowChromeRegion,
+  WindowChromeSafeArea,
+  useTopChromeInsets,
+} from "@/utils/desktop-window";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import { buildSettingsAddHostRoute, buildSettingsRoute } from "@/utils/host-routes";
@@ -661,7 +666,8 @@ function DesktopSidebar({
   insetsTop,
   active,
 }: DesktopSidebarProps) {
-  const ownsTopLeft = useOwnsWindowChromeCorner("top-left");
+  // The sidebar's top row sits below the left window controls in a chrome row of its own.
+  const ownsTopLeft = useHasOwnedWindowChromeObstruction("top-left");
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
   const setSidebarWidth = usePanelStore((state) => state.setSidebarWidth);
@@ -782,7 +788,14 @@ function DesktopSidebar({
           ) : (
             <TitlebarDragRegion />
           )}
-          <SidebarNavRows style={sidebarHeaderGroupStyle} />
+          {/* Below the chrome row the nav rows are clear of the top corners. */}
+          {ownsTopLeft || DEV_BUILD_LABEL ? (
+            <WindowChromeRegion corners="none">
+              <SidebarNavRows style={sidebarHeaderGroupStyle} />
+            </WindowChromeRegion>
+          ) : (
+            <SidebarNavRows style={sidebarHeaderGroupStyle} />
+          )}
         </View>
 
         {isInitialLoad && !hasActiveHostFilter ? (

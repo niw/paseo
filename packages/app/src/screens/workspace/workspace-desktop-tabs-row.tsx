@@ -1,6 +1,6 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { useTopRowExtraInsets } from "@/components/safe-area-edges";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTopChromeRow } from "@/utils/desktop-window";
 import React, {
   Fragment,
   useCallback,
@@ -1072,20 +1072,25 @@ function ResolvedWorkspaceDesktopTabsRow({
   );
   const [trackSnapshot, setTrackSnapshot] = useState<WorkspaceTabTrackSnapshot | null>(null);
 
-  const handleTabsContainerLayout = useCallback((event: LayoutChangeEvent) => {
-    updateMeasuredWidth(setTabsContainerWidth, event);
-  }, []);
+  const topChromeRow = useTopChromeRow();
+  const measureTopChromeRow = topChromeRow.onLayout;
+  const handleTabsContainerLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      updateMeasuredWidth(setTabsContainerWidth, event);
+      measureTopChromeRow();
+    },
+    [measureTopChromeRow],
+  );
 
   const handleExitFocusModeLayout = useCallback((event: LayoutChangeEvent) => {
     updateMeasuredWidth(setExitFocusModeWidth, event);
   }, []);
 
-  // The row's border runs under the horizontal safe-area insets; its tabs stay inside them.
-  // At the top of the explorer the row also clears an occluded corner of a shared top band.
+  // The row's border runs under the horizontal safe-area insets; its tabs stay inside them. In
+  // the workspace column's top rows the tabs also move in past a block covering a top corner.
   const safeAreaInsets = useSafeAreaInsets();
-  const topRowExtraInsets = useTopRowExtraInsets();
-  const paddingLeft = safeAreaInsets.left + topRowExtraInsets.left;
-  const paddingRight = safeAreaInsets.right + topRowExtraInsets.right;
+  const paddingLeft = safeAreaInsets.left + topChromeRow.left;
+  const paddingRight = safeAreaInsets.right + topChromeRow.right;
   const safeAreaPaddingStyle = useMemo(
     () => ({ paddingLeft, paddingRight }),
     [paddingLeft, paddingRight],
@@ -1392,6 +1397,7 @@ function ResolvedWorkspaceDesktopTabsRow({
     <View
       style={[styles.tabsContainer, onSidebar && styles.tabsContainerSidebar, safeAreaPaddingStyle]}
       testID="workspace-tabs-row"
+      ref={topChromeRow.ref}
       onLayout={handleTabsContainerLayout}
     >
       <View

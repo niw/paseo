@@ -124,15 +124,17 @@ export function ExplorerSidebarDock({
   const insets = useSafeAreaInsets();
   return (
     <RetainedPanel active>
-      <WindowChromeRegion corners="top-right">
-        <View style={styles.dock} testID="workspace-explorer-sidebar">
-          <WindowChromeSafeArea
-            placement="inline"
-            style={styles.tabRail}
-            paddingLeftExtra={insets.left}
-            paddingRightExtra={insets.right}
-          >
-            <TitlebarDragRegion />
+      <View style={styles.dock} testID="workspace-explorer-sidebar">
+        <WindowChromeSafeArea
+          placement="inline"
+          style={styles.tabRail}
+          paddingLeftExtra={insets.left}
+          paddingRightExtra={insets.right}
+        >
+          <TitlebarDragRegion />
+          {/* The rail moves its ends in past the window's top corners, so the tab row inside it
+              does not. */}
+          <WindowChromeRegion corners="none">
             <ConsumeSideInsets>
               <View style={styles.tabRow}>
                 <WorkspaceDesktopTabsRow
@@ -169,8 +171,11 @@ export function ExplorerSidebarDock({
               </View>
               {headerAction ? <View style={styles.headerAction}>{headerAction}</View> : null}
             </ConsumeSideInsets>
-            <View pointerEvents="none" style={styles.tabRailDivider} />
-          </WindowChromeSafeArea>
+          </WindowChromeRegion>
+          <View pointerEvents="none" style={styles.tabRailDivider} />
+        </WindowChromeSafeArea>
+        {/* The tab rail is the panel's top row; the panes under it own no window corner. */}
+        <WindowChromeRegion corners="none">
           <View style={styles.content}>
             <WorkspacePanelHost
               paneId={pane.id}
@@ -183,8 +188,8 @@ export function ExplorerSidebarDock({
               buildPaneContentModel={buildPaneContentModel}
             />
           </View>
-        </View>
-      </WindowChromeRegion>
+        </WindowChromeRegion>
+      </View>
     </RetainedPanel>
   );
 }

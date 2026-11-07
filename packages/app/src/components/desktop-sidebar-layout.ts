@@ -31,7 +31,10 @@ export function resolveDesktopAppChromeLayout(input: {
     sidebarToggleOwner = input.hasTopLeftWindowControls ? "window" : "content";
   }
   return {
-    sidebarCorners: sidebarOwnsTopLeft ? ("top-left" as const) : ("none" as const),
+    // A rendered sidebar's top row sits in the window's top-left corner, so it clears the display's
+    // corner there. Without left window controls the content keeps the corner too, for the sidebar
+    // toggle in its header; it does not touch the left edge, so it clears no display corner there.
+    sidebarCorners: input.desktopSidebarRendered ? ("top-left" as const) : ("none" as const),
     contentCorners: sidebarOwnsTopLeft ? ("top-right" as const) : ("both" as const),
     sidebarToggleOwner,
   };

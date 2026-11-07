@@ -1,4 +1,5 @@
 import { router, usePathname } from "expo-router";
+import { useWindowChromeCornerInsets } from "@/utils/desktop-window";
 import { useFullBleedStyle } from "@/components/padded-side-insets";
 import { CalendarClock, History, Plus, Search } from "lucide-react-native";
 import { memo, useCallback, useMemo, useRef, type ComponentType, type ReactNode } from "react";
@@ -46,7 +47,13 @@ export function SidebarNavRows({ style, onBeforeNavigate, firstRowTrailing }: Si
   const visibleItems = useMemo(() => items.filter((item) => item.visible), [items]);
   const groupRef = useRef<View | null>(null);
   // The group's bottom rule reaches the sidebar's edges past a side inset; its rows stay inside.
+  // The first row moves in past the display corners the sidebar's top row reaches.
   const fullBleedStyle = useFullBleedStyle();
+  const cornerInsets = useWindowChromeCornerInsets();
+  const firstRowInsetStyle = useMemo(
+    () => ({ paddingLeft: cornerInsets.left, paddingRight: cornerInsets.right }),
+    [cornerInsets.left, cornerInsets.right],
+  );
 
   if (visibleItems.length === 0 && !firstRowTrailing) return null;
 
@@ -68,14 +75,10 @@ export function SidebarNavRows({ style, onBeforeNavigate, firstRowTrailing }: Si
 
   return (
     <View ref={groupRef} collapsable={false} style={[style, fullBleedStyle]}>
-      {firstRowTrailing ? (
-        <View style={styles.firstRow}>
-          <View style={styles.firstRowItem}>{firstRow}</View>
-          {firstRowTrailing}
-        </View>
-      ) : (
-        firstRow
-      )}
+      <View style={[styles.firstRow, firstRowInsetStyle]}>
+        <View style={styles.firstRowItem}>{firstRow}</View>
+        {firstRowTrailing}
+      </View>
       {restRows}
     </View>
   );

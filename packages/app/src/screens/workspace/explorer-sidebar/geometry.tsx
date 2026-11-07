@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTopChromeInsets } from "@/components/safe-area-edges";
+import { useTopChromeInsets } from "@/utils/desktop-window";
 import { Gesture } from "react-native-gesture-handler";
 import { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
@@ -20,7 +20,7 @@ export function useExplorerGeometry({
   onResize,
 }: ExplorerGeometryInput): ExplorerGeometry {
   const insets = useSafeAreaInsets();
-  // The panel's top row is its tab row: it shares a shareable top band.
+  // The panel's top row is its tab row: it shares a shareable top band and clears the corners.
   const overlayTopPadding = overlay ? HEADER_TOP_PADDING_MOBILE : 0;
   const topChrome = useTopChromeInsets(WORKSPACE_SECONDARY_HEADER_HEIGHT + overlayTopPadding);
   const resizeWidth = useSharedValue(width);
