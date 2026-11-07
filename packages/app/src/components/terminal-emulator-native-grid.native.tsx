@@ -75,6 +75,7 @@ import {
 
 const MIN_NATIVE_TERMINAL_ROWS = 1;
 const MIN_NATIVE_TERMINAL_COLS = 1;
+const FOLLOW_BUTTON_INSET = 12;
 const DEFAULT_XTERM_THEME: ITheme = {
   background: "#0b0b0b",
   foreground: "#e6e6e6",
@@ -94,6 +95,7 @@ function NativeTerminalEmulator({
   fontFamily,
   fontSize,
   keyboardInset = 0,
+  gridInsetRight = 0,
   isKeyboardVisible = false,
   onInput,
   onTerminalKey,
@@ -530,15 +532,33 @@ function NativeTerminalEmulator({
     emitMeasuredSize({ source: "measure" });
   }, [emitMeasuredSize, keyboardInset]);
 
+  // The view spans the edge so it scrolls there; the grid's columns stop at the inset.
+  const measuredLayoutRef = useRef<TerminalMeasuredLayout | null>(null);
+  const gridInsetRightRef = useRef(gridInsetRight);
+  gridInsetRightRef.current = gridInsetRight;
+  const applyLayout = useCallback(() => {
+    const measured = measuredLayoutRef.current;
+    if (!measured) return;
+    layoutRef.current = {
+      width: Math.max(0, measured.width - gridInsetRightRef.current),
+      height: measured.height,
+    };
+    emitMeasuredSize({ source: "measure" });
+  }, [emitMeasuredSize]);
+
+  useEffect(() => {
+    applyLayout();
+  }, [applyLayout, gridInsetRight]);
+
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      layoutRef.current = {
+      measuredLayoutRef.current = {
         width: event.nativeEvent.layout.width,
         height: event.nativeEvent.layout.height,
       };
-      emitMeasuredSize({ source: "measure" });
+      applyLayout();
     },
-    [emitMeasuredSize],
+    [applyLayout],
   );
 
   const handleCellMetricsChange = useCallback(
@@ -765,7 +785,7 @@ function NativeTerminalEmulator({
           accessibilityLabel="Bottom"
           accessibilityRole="button"
           onPress={returnToBottom}
-          style={styles.followButton}
+          style={[styles.followButton, { right: FOLLOW_BUTTON_INSET + gridInsetRight }]}
           testID="terminal-follow-bottom"
         >
           <Text style={styles.followButtonText}>Bottom</Text>
@@ -798,8 +818,8 @@ const styles = StyleSheet.create({
   selectionStem: { position: "absolute", width: 2, backgroundColor: "#2684ff" },
   followButton: {
     position: "absolute",
-    right: 12,
-    bottom: 12,
+    right: FOLLOW_BUTTON_INSET,
+    bottom: FOLLOW_BUTTON_INSET,
     zIndex: 2,
     borderRadius: 12,
     paddingHorizontal: 12,

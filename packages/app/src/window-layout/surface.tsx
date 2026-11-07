@@ -1,48 +1,36 @@
 import { useMemo, type ReactNode } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { SafeAreaInsetsContext, useSafeAreaInsets } from "react-native-safe-area-context";
-import { isWeb } from "@/constants/platform";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWindowLayout } from "./context";
-import { resolveWorkspaceActionPlacement, type DesktopDivisionLayout } from "./model";
+import { resolveVerticalBarEdge, type DesktopDivisionLayout } from "./model";
 
-/** Consume safe areas once; compact headers own their top inset. */
+/**
+ * The app row. It draws edge to edge: the regions in it take the side insets of the window edges
+ * they touch (`HorizontalSafeAreaRegion`), and a vertical bar's actions sit in the inset on its
+ * edge (`useVerticalBarInsets`).
+ */
 export function WindowLayoutSurface({
   children,
-  compact,
   style,
 }: {
   children: ReactNode;
-  compact: boolean;
   style: StyleProp<ViewStyle>;
 }) {
-  const insets = useSafeAreaInsets();
-  const usesBar = resolveWorkspaceActionPlacement(useWindowLayout()) === "vertical-bar";
-  // Wide browser layouts have no compact header to clear the standalone iOS status bar.
-  // Native window chrome owns its own top band.
-  const consumesTop = isWeb && !compact;
-  const surfaceStyle = useMemo(
-    () => [
-      style,
-      consumesTop && { paddingTop: insets.top },
-      (!compact || usesBar) && { paddingLeft: insets.left, paddingRight: insets.right },
-    ],
-    [style, compact, usesBar, consumesTop, insets.top, insets.left, insets.right],
-  );
-  const contentInsets = useMemo(
-    () => ({
-      ...insets,
-      ...(consumesTop ? { top: 0 } : {}),
-      ...(compact && usesBar ? { left: 0, right: 0 } : {}),
-    }),
-    [compact, usesBar, consumesTop, insets],
-  );
-  return (
-    <View style={surfaceStyle}>
-      <SafeAreaInsetsContext.Provider value={contentInsets}>
-        {children}
-      </SafeAreaInsetsContext.Provider>
-    </View>
+  return <View style={style}>{children}</View>;
+}
+
+/**
+ * The side insets a vertical bar of actions sits in, as left for this region. Text that runs
+ * under the side insets, like the chat, a terminal grid or a diff, stops at them so the bar's
+ * buttons never sit over it; backgrounds and rules still reach the edge.
+ */
+export function useVerticalBarInsets(): { left: number; right: number } {
+  const edge = resolveVerticalBarEdge(useWindowLayout());
+  const { left, right } = useSafeAreaInsets();
+  return useMemo(
+    () => ({ left: edge === "left" ? left : 0, right: edge === "right" ? right : 0 }),
+    [edge, left, right],
   );
 }
 

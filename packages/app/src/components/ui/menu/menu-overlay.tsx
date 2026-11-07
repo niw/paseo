@@ -26,6 +26,7 @@ import { Keyframe, runOnJS } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { FloatingScrollView, FloatingSurface } from "@/components/ui/floating";
 import { isWeb } from "@/constants/platform";
+import { useWindowSafeAreaInsets } from "@/components/safe-area-edges";
 import type { KeyboardFocusScope } from "@/keyboard/actions";
 import { getOverlayRoot, OverlayLayerProvider, useOverlayLayer } from "@/lib/overlay-root";
 import {
@@ -115,6 +116,8 @@ export function useAnchoredPosition({
   const [contentSize, setContentSize] = useState<Size | null>(null);
   const [position, setPosition] = useState<SurfacePosition | null>(null);
   const [actualPlacement, setActualPlacement] = useState<Placement>(side);
+  // Keep the surface clear of a side camera strip; the window's insets, not the anchor region's.
+  const { left: safeAreaLeft, right: safeAreaRight } = useWindowSafeAreaInsets();
 
   const visibleContentSize = useMemo(() => {
     if (!contentSize) return null;
@@ -172,7 +175,12 @@ export function useAnchoredPosition({
     const result = computePosition({
       triggerRect,
       contentSize: visibleContentSize,
-      displayArea: { x: 0, y: 0, width: screenWidth, height: screenHeight },
+      displayArea: {
+        x: safeAreaLeft,
+        y: 0,
+        width: Math.max(screenWidth - safeAreaLeft - safeAreaRight, 0),
+        height: screenHeight,
+      },
       placement: side,
       alignment: align,
       offset,
@@ -180,7 +188,7 @@ export function useAnchoredPosition({
 
     setPosition(holdSurfaceEdge(result, visibleContentSize.height));
     setActualPlacement(result.actualPlacement);
-  }, [triggerRect, visibleContentSize, side, align, offset]);
+  }, [triggerRect, visibleContentSize, side, align, offset, safeAreaLeft, safeAreaRight]);
 
   const onContentLayout = useCallback(
     (event: { nativeEvent: { layout: { width: number; height: number } } }) => {

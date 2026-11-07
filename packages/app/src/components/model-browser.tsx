@@ -9,6 +9,8 @@ import {
   useState,
   type RefObject,
 } from "react";
+import { useEdgeBleedStyle, useScrollBleedStyles } from "@/components/padded-side-insets";
+import { SheetFullBleedView } from "@/components/ui/isolated-bottom-sheet-modal";
 import { useTranslation } from "react-i18next";
 import {
   FlatList,
@@ -1131,7 +1133,7 @@ function AgentProfilesPickerSection({
     [onApplyProfile],
   );
   return (
-    <View style={styles.profilesContainer}>
+    <SheetFullBleedView style={styles.profilesContainer}>
       <View style={styles.sectionHeading}>
         <Text style={styles.sectionHeadingText}>{t("modelSelector.profiles")}</Text>
         {onEditProfiles ? (
@@ -1148,7 +1150,7 @@ function AgentProfilesPickerSection({
           onApply={handleApply}
         />
       ))}
-    </View>
+    </SheetFullBleedView>
   );
 }
 
@@ -1334,6 +1336,12 @@ function GroupProviderButton({
   );
 }
 
+/** A rule between provider rows; in a sheet it reaches the sheet's edges. */
+function ProviderRowSeparator() {
+  const edgeBleedStyle = useEdgeBleedStyle();
+  return <View style={[styles.separator, edgeBleedStyle]} />;
+}
+
 function GroupedProviderRows({
   providers,
   serverId,
@@ -1347,7 +1355,7 @@ function GroupedProviderRows({
     <View>
       {providers.map((provider, index) => (
         <View key={provider.id}>
-          {index > 0 ? <View style={styles.separator} /> : null}
+          {index > 0 ? <ProviderRowSeparator /> : null}
           <GroupProviderButton provider={provider} serverId={serverId} onDrillDown={onDrillDown} />
         </View>
       ))}
@@ -1424,6 +1432,8 @@ function IndependentModelList({
     listKey: rows,
   });
 
+  // In a sheet the list reaches the sheet's edges so its rules can; rows stay inside the insets.
+  const bleed = useScrollBleedStyles();
   return (
     <IndependentScrollBoundary>
       <FlatList
@@ -1436,11 +1446,11 @@ function IndependentModelList({
         onScrollToIndexFailed={reveal.onScrollToIndexFailed}
         onViewableItemsChanged={reveal.onViewableItemsChanged}
         viewabilityConfig={reveal.viewabilityConfig}
-        style={styles.virtualizedModelList}
+        style={[styles.virtualizedModelList, bleed.style]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={MODEL_LIST_KEYBOARD_DISMISS_MODE}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.virtualizedModelListContent}
+        contentContainerStyle={[styles.virtualizedModelListContent, bleed.contentContainerStyle]}
         nestedScrollEnabled
         testID="compact-model-list"
       />
@@ -1463,14 +1473,17 @@ function IndependentProviderList({
   onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   children: React.ReactNode;
 }) {
+  // In a sheet the list reaches the sheet's edges so its rules can; rows stay inside the insets.
+  const bleed = useScrollBleedStyles();
   return (
     <IndependentScrollBoundary>
       <ScrollView
         ref={scrollRef}
-        style={styles.virtualizedModelList}
+        style={[styles.virtualizedModelList, bleed.style]}
         contentContainerStyle={[
           styles.virtualizedModelListContent,
           styles.virtualizedProviderListContent,
+          bleed.contentContainerStyle,
         ]}
         onLayout={onLayout}
         onScroll={onScroll}

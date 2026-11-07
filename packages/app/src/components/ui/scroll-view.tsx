@@ -1,4 +1,5 @@
 import { forwardRef, type Ref } from "react";
+import { useScrollBleedStyles } from "@/components/padded-side-insets";
 import {
   ScrollView as NativeScrollView,
   FlatList as NativeFlatList,
@@ -42,13 +43,30 @@ export const ScrollView = forwardRef<NativeScrollView, ScrollViewProps>(
 
 const PageScrollView = withContentDrag<ScrollViewProps, NativeScrollView>(NativeScrollView);
 
-const SheetScrollView = withContentDrag<ScrollViewProps, NativeScrollView>(
+const DraggableSheetScrollView = withContentDrag<ScrollViewProps, NativeScrollView>(
   SheetScroll,
   useAttachSheetContentDrag,
 );
 
+// In a sheet the scroller reaches the sheet's edges and keeps its content inside the side
+// insets, so rules in it can run edge to edge.
+const SheetScrollView = forwardRef<NativeScrollView, ScrollViewProps>(
+  function SheetScrollView(props, ref) {
+    const bleed = useScrollBleedStyles();
+    return (
+      <DraggableSheetScrollView
+        {...props}
+        ref={ref}
+        style={[props.style, bleed.style]}
+        contentContainerStyle={[props.contentContainerStyle, bleed.contentContainerStyle]}
+      />
+    );
+  },
+);
+
 function SheetAwareFlatList<Item>(props: FlatListProps<Item>, ref: Ref<NativeFlatList<Item>>) {
   const inSheet = useIsInsideBottomSheet();
+  const bleed = useScrollBleedStyles();
   if (!inSheet) return <NativeFlatList {...props} ref={ref} />;
   if (props.horizontal) {
     return isNative ? (
@@ -57,7 +75,14 @@ function SheetAwareFlatList<Item>(props: FlatListProps<Item>, ref: Ref<NativeFla
       <NativeFlatList {...props} ref={ref} />
     );
   }
-  return <SheetFlatList {...props} ref={ref} />;
+  return (
+    <SheetFlatList
+      {...props}
+      ref={ref}
+      style={[props.style, bleed.style]}
+      contentContainerStyle={[props.contentContainerStyle, bleed.contentContainerStyle]}
+    />
+  );
 }
 
 // forwardRef erases the item generic. All three implementations expose the RN list methods.

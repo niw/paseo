@@ -579,9 +579,9 @@ const SURFACE_STYLE = { flex: 1 };
 const COMPOSER_NEAR_TOP_STYLE = { position: "absolute" as const, top: 60, left: 16, width: 358 };
 
 /**
- * A wide browser layout surface pads the status bar and gives its content a top inset of 0. The
- * root portal host sits outside that surface, against the window's top edge, so a composer inside
- * the surface that portals there still has to keep the popover below the status bar.
+ * The root portal host sits outside the layout surface, against the window's top edge, so a
+ * composer inside the surface that portals there still has to keep the popover below the status
+ * bar.
  */
 function ComposerNearTop(): ReactNode {
   return (
@@ -602,7 +602,7 @@ function ComposerNearTop(): ReactNode {
 function WideSurfaceScreen(): ReactNode {
   return (
     <View style={SCREEN_STYLE}>
-      <WindowLayoutSurface compact={false} style={SURFACE_STYLE}>
+      <WindowLayoutSurface style={SURFACE_STYLE}>
         <ComposerNearTop />
       </WindowLayoutSurface>
       <FloatingPanelPortalHost />

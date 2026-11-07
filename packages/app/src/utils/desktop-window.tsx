@@ -12,7 +12,6 @@ import {
   getDesktopWindowControlsWidth,
 } from "@/desktop/window-chrome-presentation";
 import { isNative } from "@/constants/platform";
-import { useTopBand, type TopBand } from "@/window-layout";
 
 export type WindowChromeCorners = "none" | "top-left" | "top-right" | "both";
 type WindowChromeSafeAreaPlacement = "inline" | "below";
@@ -106,15 +105,10 @@ export function removeWindowChromeCorner(
   return corner === "top-left" ? "top-right" : "top-left";
 }
 
-/** Desktop window controls, or the system region a native top band gives way to. */
 export function resolveWindowChromeObstruction(input: {
   mode: DesktopWindowChromeMode | null;
   isFullscreen: boolean;
-  topBand: TopBand | null;
 }): WindowChromeObstruction {
-  if (input.topBand?.trailingObstruction) {
-    return { topLeft: null, topRight: input.topBand.trailingObstruction };
-  }
   if (!input.mode || input.isFullscreen) return EMPTY_OBSTRUCTION;
   if (input.mode === "native-mac") {
     return {
@@ -223,15 +217,13 @@ export function WindowChromeProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const topBand = useTopBand();
   const obstruction = useMemo(
     () =>
       resolveWindowChromeObstruction({
         mode: isElectronReady ? getDesktopWindowChromeMode() : null,
         isFullscreen: windowState.isFullscreen,
-        topBand,
       }),
-    [isElectronReady, windowState.isFullscreen, topBand],
+    [isElectronReady, windowState.isFullscreen],
   );
   const desktopWindowChrome = useMemo(
     () => ({
@@ -317,11 +309,16 @@ export function useHasOwnedWindowChromeObstruction(corner: WindowChromeCorner): 
 type WindowChromeSafeAreaProps = ViewProps & {
   placement: WindowChromeSafeAreaPlacement;
   horizontalPadding?: number;
+  /** Extra inline padding per side, such as the horizontal safe-area insets. */
+  paddingLeftExtra?: number;
+  paddingRightExtra?: number;
 };
 
 export function WindowChromeSafeArea({
   placement,
   horizontalPadding = 0,
+  paddingLeftExtra = 0,
+  paddingRightExtra = 0,
   style,
   ...props
 }: WindowChromeSafeAreaProps) {
@@ -333,10 +330,10 @@ export function WindowChromeSafeArea({
     const paddingLeft = "paddingLeft" in resolved ? resolved.paddingLeft : 0;
     const paddingRight = "paddingRight" in resolved ? resolved.paddingRight : 0;
     return {
-      paddingLeft: paddingLeft + horizontalPadding,
-      paddingRight: paddingRight + horizontalPadding,
+      paddingLeft: paddingLeft + horizontalPadding + paddingLeftExtra,
+      paddingRight: paddingRight + horizontalPadding + paddingRightExtra,
     };
-  }, [corners, horizontalPadding, obstruction, placement]);
+  }, [corners, horizontalPadding, obstruction, paddingLeftExtra, paddingRightExtra, placement]);
   const combinedStyle = useMemo(() => [style, safeAreaStyle], [safeAreaStyle, style]);
   return <View {...props} style={combinedStyle} />;
 }

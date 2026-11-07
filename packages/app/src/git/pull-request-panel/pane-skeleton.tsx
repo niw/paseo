@@ -1,7 +1,9 @@
 import { Text, View } from "react-native";
+import { RegionPaddedView } from "@/components/padded-side-insets";
 import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { PaneContentToolbar } from "@/components/ui/pane-content-toolbar";
+import { SPACING } from "@/styles/theme";
 import { SkeletonPulse, useSkeletonPulse } from "@/components/ui/skeleton";
 import { PrActivitySkeleton } from "./activity-skeleton";
 
@@ -13,31 +15,34 @@ export function PullRequestPaneSkeleton() {
 
   return (
     <View style={styles.root} testID="pr-pane-skeleton">
-      <View style={styles.header}>
+      <RegionPaddedView style={styles.header}>
         <SkeletonPulse pulse={pulse} style={styles.title} />
         <SkeletonPulse pulse={pulse} style={styles.subtitle} />
-      </View>
+      </RegionPaddedView>
 
-      <PaneContentToolbar style={styles.toolbar}>
+      <PaneContentToolbar style={styles.toolbar} paddingLeft={SPACING[3]} paddingRight={SPACING[3]}>
         <SkeletonPulse pulse={pulse} style={styles.toolbarButton} />
         <SkeletonPulse pulse={pulse} style={styles.toolbarButton} />
       </PaneContentToolbar>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t("workspace.git.pr.sections.checks")}</Text>
-        <View style={styles.checks}>
-          {CHECK_ROW_KEYS.map((key) => (
-            <View key={key} style={styles.checkRow}>
-              <SkeletonPulse pulse={pulse} style={styles.checkDot} />
-              <SkeletonPulse pulse={pulse} style={styles.checkName} />
-            </View>
-          ))}
+      {/* The toolbar runs under the side insets; the sections stay inside them. */}
+      <RegionPaddedView>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("workspace.git.pr.sections.checks")}</Text>
+          <View style={styles.checks}>
+            {CHECK_ROW_KEYS.map((key) => (
+              <View key={key} style={styles.checkRow}>
+                <SkeletonPulse pulse={pulse} style={styles.checkDot} />
+                <SkeletonPulse pulse={pulse} style={styles.checkName} />
+              </View>
+            ))}
+          </View>
         </View>
-      </View>
 
-      <View style={styles.section}>
-        <PrActivitySkeleton />
-      </View>
+        <View style={styles.section}>
+          <PrActivitySkeleton />
+        </View>
+      </RegionPaddedView>
     </View>
   );
 }
@@ -69,7 +74,6 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
   },
   toolbarButton: {
     width: 96,

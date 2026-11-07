@@ -1,4 +1,5 @@
 import { ChatFind, ChatFindExpansion } from "@/agent-stream/chat-find";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import React, {
   forwardRef,
@@ -318,9 +319,14 @@ function ScrollToBottomButton({
 }) {
   const { t } = useTranslation();
   const isNearBottom = useIsNearBottom(nearBottom);
+  // The stream runs under the side insets; the button centers between them.
+  const safeAreaInsets = useSafeAreaInsets();
   const containerStyle = useMemo(
-    () => [stylesheet.scrollToBottomContainer, { bottom: bottomOffset }],
-    [bottomOffset],
+    () => [
+      stylesheet.scrollToBottomContainer,
+      { bottom: bottomOffset, left: safeAreaInsets.left, right: safeAreaInsets.right },
+    ],
+    [bottomOffset, safeAreaInsets.left, safeAreaInsets.right],
   );
   if (isNearBottom && !isTimelineDetached) return null;
   return (

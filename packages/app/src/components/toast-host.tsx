@@ -3,6 +3,7 @@ import {
   useFloatingHeaderOverlayClearance,
 } from "@/components/floating-header";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useTopChromeInsets } from "@/components/safe-area-edges";
 import { createPortal } from "react-dom";
 import {
   Platform,
@@ -13,7 +14,6 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SPACING, type Theme } from "@/styles/theme";
 import { CONTROL_HEIGHTS, mapLayout } from "@/components/ui/control-geometry";
@@ -191,7 +191,6 @@ export function ToastViewport({
   /** Sidebar placement: reports the distance from the region's bottom edge to the toast's top. */
   onBottomCoverageChange?: (coverage: number) => void;
 }) {
-  const insets = useSafeAreaInsets();
   const isMobile = useIsCompactFormFactor();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dismissDeadlineRef = useRef<number | null>(null);
@@ -260,8 +259,12 @@ export function ToastViewport({
   const panelClearance = useFloatingHeaderOverlayClearance();
   const headerHeight = isMobile ? HEADER_INNER_HEIGHT_MOBILE : HEADER_INNER_HEIGHT;
   const headerTopPadding = isMobile ? HEADER_TOP_PADDING_MOBILE : 0;
+  // Below the header, which may share the top inset beside an occluded corner.
+  const headerTopChrome = useTopChromeInsets(headerHeight + headerTopPadding);
   const topOffset =
-    placement === "app-shell" ? insets.top + headerTopPadding + headerHeight : panelClearance;
+    placement === "app-shell"
+      ? headerTopChrome.paddingTop + headerTopPadding + headerHeight
+      : panelClearance;
 
   if (placement === "sidebar") {
     return (

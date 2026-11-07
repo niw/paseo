@@ -459,15 +459,12 @@ Wrapping providers _around_ the modal does nothing. They land on the wrong side.
 
 ## Gotcha 8 — Read safe-area insets where the overlay draws
 
-Two containers spend an inset and give their content 0 for that edge:
+Regions narrow the insets for their subtree; see [safe-area.md](safe-area.md).
 
-- A compact sheet tab's body (`SheetBottomInset` in `adaptive-modal-sheet.tsx`) pads the bottom
-  inset, so the composer dock sits the same in a sheet as in a tab.
-- `WindowLayoutSurface` on a wide web layout pads the top inset, the status bar of an iOS Home
-  Screen web app (`docs/design.md`, section 9).
-
-An overlay opened from that content and calling `useSafeAreaInsets()` at its call site gets that 0
-and draws over the navigation bar or under the status bar. Read the inset where the overlay draws:
+A compact sheet tab's body (`SheetBottomInset` in `adaptive-modal-sheet.tsx`) pads the bottom
+inset and gives its content a bottom inset of 0, so the composer dock sits the same in a sheet as
+in a tab. An overlay opened from that content and calling `useSafeAreaInsets()` at its call site
+gets that 0 and draws over the navigation bar. Read the inset where the overlay draws:
 
 - A Gorhom sheet reads the inset inside its children, which render in the app's sheet host. See
   `SheetVisibleFrame` (used by `CompactSheetBody` and `ComboboxSheetFrame`) and `MenuSheetScrollView`.
@@ -478,10 +475,8 @@ and draws over the navigation bar or under the status bar. Read the inset where 
   again over the first frames, and everything padded by it jumps. See `attachment-lightbox.tsx`
   and the Mermaid fullscreen viewer.
 - A panel in a `FloatingPanelPortalHost` reads `useSafeAreaInsets()` inside the portal, where it
-  resolves at the host's position (Gotcha 2): the root host sits outside the layout surface and
-  gets the window's inset, a workspace host inside it gets 0. See the autocomplete `PopoverFrame`.
-- An absolutely positioned view that covers the surface's padding, such as the overlay left
-  sidebar, reads the window's insets with `useWindowSafeAreaInsets()`.
+  resolves at the host's position (Gotcha 2), not at the anchor's. See the autocomplete
+  `PopoverFrame`.
 
 ## Recipe for a new anchored panel
 

@@ -35,6 +35,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/unistyles.md](docs/unistyles.md)                               | Unistyles gotchas — `useUnistyles()` is forbidden, alternatives in order                                                       |
 | [docs/floating-panels.md](docs/floating-panels.md)                   | Anchored popovers — Portal/Modal escape for Android, lifecycle gates, keyboard-shared-value, status-bar offset, the flash      |
 | [docs/keyboard-shortcuts.md](docs/keyboard-shortcuts.md)             | The binding table, per-platform key sources, badges vs routing, iOS `UIKeyCommand` limits                                      |
+| [docs/safe-area.md](docs/safe-area.md)                               | Safe-area insets on any edge: full-bleed backgrounds, controls inside, which region owns each edge                             |
 | [docs/menus.md](docs/menus.md)                                       | The menu engine — popover vs sheet, submenu pages, hover intent, when a decision earns a submenu                               |
 | [docs/drag-reorder.md](docs/drag-reorder.md)                         | Drag to reorder — `DraggableList` and its handle, the scroll view that must host the drag, grip placement, testing on a phone  |
 | [docs/expo-router.md](docs/expo-router.md)                           | Expo Router route ownership, startup restore, and native blank-screen gotchas                                                  |
