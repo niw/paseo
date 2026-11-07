@@ -3,12 +3,19 @@ import { isWeb } from "@/constants/platform";
 
 export const FOOTER_HEIGHT = 75;
 
+/**
+ * Native apps are driven by touch at every width, so they take the touch sizes that compact
+ * layouts use even in a wide layout, like iPad or iPhone Duo unfolded. Web and desktop keep
+ * pointer sizes in wide layouts. Sizing only: layout still follows the breakpoint.
+ */
+export const usesTouchSizing = !isWeb;
+
 // Shared header inner height (excluding safe area insets and border)
 // Used by both agent header (ScreenHeader) and explorer sidebar header
 // This ensures both headers have the same visual height
-export const HEADER_INNER_HEIGHT = 36;
+export const HEADER_INNER_HEIGHT = usesTouchSizing ? 44 : 36;
 export const HEADER_INNER_HEIGHT_MOBILE = 56;
-export const WORKSPACE_SECONDARY_HEADER_HEIGHT = 36;
+export const WORKSPACE_SECONDARY_HEADER_HEIGHT = usesTouchSizing ? 44 : 36;
 export const HEADER_TOP_PADDING_MOBILE = 8;
 
 // Measured composer width; independent of the window's compact/wide breakpoint.

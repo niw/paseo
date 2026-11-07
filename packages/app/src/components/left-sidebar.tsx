@@ -955,8 +955,11 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[1.5],
     gap: 2,
   },
+  // Touch-sized buttons can outgrow a narrow sidebar; past the spacer they narrow, never shorten.
   footerIconButton: {
     width: density.iconButton,
+    flexShrink: 1,
+    minWidth: 32,
     height: density.iconButton,
     alignItems: "center",
     justifyContent: "center",

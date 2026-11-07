@@ -102,7 +102,7 @@ export function SidebarHelpMenu() {
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <Tooltip delayDuration={300} enabledOnDesktop={!open}>
         <TooltipTrigger asChild>
-          <View>
+          <View style={styles.triggerSlot}>
             <DropdownMenuTrigger
               style={styles.trigger}
               testID="sidebar-help"
@@ -186,8 +186,15 @@ export function SidebarHelpMenu() {
 }
 
 const styles = StyleSheet.create((theme) => ({
-  trigger: {
+  // The slot is the footer row's item: it narrows with the other footer buttons in a narrow
+  // sidebar, and the trigger fills it.
+  triggerSlot: {
     width: density.iconButton,
+    flexShrink: 1,
+    minWidth: 32,
+  },
+  trigger: {
+    alignSelf: "stretch",
     height: density.iconButton,
     alignItems: "center",
     justifyContent: "center",
