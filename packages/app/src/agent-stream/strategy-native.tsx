@@ -24,6 +24,15 @@ import {
   useSyncLayout,
 } from "@legendapp/list/react-native";
 import { withUnistyles } from "react-native-unistyles";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useStreamBottomOverlayInset } from "./bottom-overlay";
+import {
+  resolveStreamColumn,
+  STREAM_LIST_HORIZONTAL_PADDING,
+  StreamColumnInsetsContext,
+} from "./column";
+import { useIsCompactFormFactor } from "@/constants/layout";
+import { useVerticalBarInsets } from "@/window-layout";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
 import { useRetainedPanelActive } from "@/components/retained-panel";
@@ -427,11 +436,58 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     [pinsEnd],
   );
   const topOverlayInset = useStreamTopOverlayInset();
+  const bottomOverlayInset = useStreamBottomOverlayInset();
+  // The list scrolls edge to edge, under the side insets; see `resolveStreamColumn`. Beside a
+  // vertical bar of actions the list still scrolls to the edge, but its rows stop at the bar's
+  // inset, so their text never runs under the buttons.
+  const safeAreaInsets = useSafeAreaInsets();
+  const barInsets = useVerticalBarInsets();
+  const isCompact = useIsCompactFormFactor();
+  const listPadding = isCompact
+    ? STREAM_LIST_HORIZONTAL_PADDING.compact
+    : STREAM_LIST_HORIZONTAL_PADDING.regular;
+  const [listWidth, setListWidth] = useState(0);
+  const column = useMemo(
+    () =>
+      resolveStreamColumn({
+        width: Math.max(0, listWidth - barInsets.left - barInsets.right),
+        insetLeft: safeAreaInsets.left - barInsets.left,
+        insetRight: safeAreaInsets.right - barInsets.right,
+        maxWidth: props.contentMaxWidth,
+        listPadding,
+      }),
+    [
+      barInsets.left,
+      barInsets.right,
+      listPadding,
+      listWidth,
+      props.contentMaxWidth,
+      safeAreaInsets.left,
+      safeAreaInsets.right,
+    ],
+  );
   // No keyboard inset: one committed after the keyboard settles moves every row when the end pin is
-  // not holding the offset (docs/agent-stream-disclosure.md).
+  // not holding the offset (docs/agent-stream-disclosure.md). The composer floats over the bottom
+  // of the stream, so the content ends above it. The content container spans the list's width and
+  // places the column with padding: on iOS a drag only scrolls when it starts over the content, so
+  // a margin would leave the space beside the column, like under a vertical bar, unscrollable.
+  const paddingLeft = listPadding + barInsets.left + column.marginLeft;
+  const paddingRight = listPadding + barInsets.right + column.marginRight;
   const listContentContainerStyle = useMemo(
-    () => [baseListContentContainerStyle, { paddingTop: topOverlayInset }],
-    [baseListContentContainerStyle, topOverlayInset],
+    () => [
+      baseListContentContainerStyle,
+      {
+        paddingLeft,
+        paddingRight,
+        paddingTop: topOverlayInset,
+        paddingBottom: bottomOverlayInset,
+      },
+    ],
+    [baseListContentContainerStyle, bottomOverlayInset, paddingLeft, paddingRight, topOverlayInset],
+  );
+  const scrollIndicatorInsets = useMemo(
+    () => ({ bottom: bottomOverlayInset }),
+    [bottomOverlayInset],
   );
 
   useEffect(() => {
@@ -618,6 +674,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     const previousViewportHeight = streamViewportMetricsRef.current.viewportHeight;
     const viewportWidth = Math.max(0, event.nativeEvent.layout.width);
     const viewportHeight = Math.max(0, event.nativeEvent.layout.height);
+    setListWidth(viewportWidth);
     streamViewportMetricsRef.current = {
       ...streamViewportMetricsRef.current,
       containerKey: "native-virtualized",
@@ -733,48 +790,51 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   }, [historyStartPaginationState, hasOlderHistory, retryHistoryStart, t]);
 
   return (
-    <View style={viewportStyle}>
-      <LegendList<StreamItem>
-        ref={listRef}
-        data={rows}
-        renderItem={renderItem}
-        extraData={renderHistoryMountedRow}
-        keyExtractor={keyExtractor}
-        testID="agent-chat-scroll"
-        nativeID="agent-chat-scroll-native-virtualized"
-        ListHeaderComponent={historyStartContent}
-        ListFooterComponent={liveAuxiliaryContent ?? undefined}
-        contentContainerStyle={listContentContainerStyle}
-        automaticallyAdjustContentInsets={false}
-        automaticallyAdjustsScrollIndicatorInsets={false}
-        contentInsetAdjustmentBehavior="never"
-        style={[listStyle, { opacity: historyStartPaginationState.visible ? 1 : 0 }]}
-        onLayout={handleListLayout}
-        onScroll={handleScroll}
-        onScrollBeginDrag={handleScrollBeginDrag}
-        onScrollEndDrag={handleScrollEndDrag}
-        onMomentumScrollBegin={handleMomentumScrollBegin}
-        onMomentumScrollEnd={handleMomentumScrollEnd}
-        scrollEventThrottle={16}
-        onContentSizeChange={handleContentSizeChange}
-        onItemSizeChanged={handleItemSizeChanged}
-        onReady={handleListPlaced}
-        maintainVisibleContentPosition={maintainVisibleContentPosition}
-        renderScrollComponent={renderScrollComponent}
-        recycleItems={false}
-        alignItemsAtEnd
-        initialScrollAtEnd
-        drawDistance={NATIVE_STREAM_DRAW_DISTANCE}
-        getEstimatedItemSize={getEstimatedItemSize}
-        scrollEnabled={scrollEnabled}
-        showsVerticalScrollIndicator
-      />
-      {!historyStartPaginationState.visible ? (
-        <View pointerEvents="none" testID="agent-initial-fill" style={initialFillStyle}>
-          <ThemedLoadingSpinner size="large" uniProps={foregroundMutedColorMapping} />
-        </View>
-      ) : null}
-    </View>
+    <StreamColumnInsetsContext.Provider value={column.insets}>
+      <View style={viewportStyle}>
+        <LegendList<StreamItem>
+          ref={listRef}
+          data={rows}
+          renderItem={renderItem}
+          extraData={renderHistoryMountedRow}
+          keyExtractor={keyExtractor}
+          testID="agent-chat-scroll"
+          nativeID="agent-chat-scroll-native-virtualized"
+          ListHeaderComponent={historyStartContent}
+          ListFooterComponent={liveAuxiliaryContent ?? undefined}
+          contentContainerStyle={listContentContainerStyle}
+          automaticallyAdjustContentInsets={false}
+          automaticallyAdjustsScrollIndicatorInsets={false}
+          contentInsetAdjustmentBehavior="never"
+          scrollIndicatorInsets={scrollIndicatorInsets}
+          style={[listStyle, { opacity: historyStartPaginationState.visible ? 1 : 0 }]}
+          onLayout={handleListLayout}
+          onScroll={handleScroll}
+          onScrollBeginDrag={handleScrollBeginDrag}
+          onScrollEndDrag={handleScrollEndDrag}
+          onMomentumScrollBegin={handleMomentumScrollBegin}
+          onMomentumScrollEnd={handleMomentumScrollEnd}
+          scrollEventThrottle={16}
+          onContentSizeChange={handleContentSizeChange}
+          onItemSizeChanged={handleItemSizeChanged}
+          onReady={handleListPlaced}
+          maintainVisibleContentPosition={maintainVisibleContentPosition}
+          renderScrollComponent={renderScrollComponent}
+          recycleItems={false}
+          alignItemsAtEnd
+          initialScrollAtEnd
+          drawDistance={NATIVE_STREAM_DRAW_DISTANCE}
+          getEstimatedItemSize={getEstimatedItemSize}
+          scrollEnabled={scrollEnabled}
+          showsVerticalScrollIndicator
+        />
+        {!historyStartPaginationState.visible ? (
+          <View pointerEvents="none" testID="agent-initial-fill" style={initialFillStyle}>
+            <ThemedLoadingSpinner size="large" uniProps={foregroundMutedColorMapping} />
+          </View>
+        ) : null}
+      </View>
+    </StreamColumnInsetsContext.Provider>
   );
 }
 

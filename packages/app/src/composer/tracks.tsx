@@ -24,6 +24,7 @@ import { STATUS_RING_HALO_INSET } from "@/components/status-ring/geometry";
 import { isWeb } from "@/constants/platform";
 import { usePanelAwareHorizontalScrollGesture } from "@/mobile-panels/gestures";
 import { useHorizontalSafeAreaPadding } from "@/components/safe-area-edges";
+import { useStreamBottomOverlayInset } from "@/agent-stream/bottom-overlay";
 import { SPACING } from "@/styles/theme";
 import { getStatusDotColor } from "@/utils/status-dot-color";
 import { STATUS_INDICATOR_FILLED_DOT_SIZE } from "@/utils/status-indicator-geometry";
@@ -48,7 +49,12 @@ export function ComposerTrackBar({ children }: { children: ReactNode }): ReactEl
   const scrollBoundary = useHorizontalScrollBoundary();
   // The bar spans the stream, which runs under the side insets; its pills stay inside them.
   const safeAreaPadding = useHorizontalSafeAreaPadding(SPACING[4]);
-  const barStyle = useMemo(() => [styles.bar, safeAreaPadding], [safeAreaPadding]);
+  // Where the stream runs behind a floating composer, the bar rests on the composer's top edge.
+  const composerOverlayInset = useStreamBottomOverlayInset();
+  const barStyle = useMemo(
+    () => [styles.bar, safeAreaPadding, { bottom: composerOverlayInset }],
+    [composerOverlayInset, safeAreaPadding],
+  );
   return (
     <View style={barStyle} pointerEvents="box-none">
       <View style={styles.trackViewport} pointerEvents="box-none">
