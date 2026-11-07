@@ -95,7 +95,7 @@ export interface TopRowClearance {
   right: number;
 }
 
-/** Top rows on native are touch-sized; see `usesTouchSizing`. */
+/** Top rows on native are touch-sized; see `resolveControlSizing`. */
 export const TOP_ROW_HEIGHT = 44;
 /** A top row's controls sit about this tall, centered in the row. */
 const TOP_ROW_CONTROL_HEIGHT = 32;
