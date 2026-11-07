@@ -1,39 +1,36 @@
 import { useMemo, type ReactNode } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { SafeAreaInsetsContext, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWindowLayout } from "./context";
-import { resolveWorkspaceActionPlacement, type DesktopDivisionLayout } from "./model";
+import { resolveVerticalBarEdge, type DesktopDivisionLayout } from "./model";
 
-/** Consume horizontal safe areas once, including compact content beside a vertical bar. */
+/**
+ * The app row. It draws edge to edge: the regions in it take the side insets of the window edges
+ * they touch (`HorizontalSafeAreaRegion`), and a vertical bar's actions sit in the inset on its
+ * edge (`useVerticalBarInsets`).
+ */
 export function WindowLayoutSurface({
   children,
-  compact,
   style,
 }: {
   children: ReactNode;
-  compact: boolean;
   style: StyleProp<ViewStyle>;
 }) {
-  const insets = useSafeAreaInsets();
-  const usesBar = resolveWorkspaceActionPlacement(useWindowLayout()) === "vertical-bar";
-  const surfaceStyle = useMemo(
-    () => [
-      style,
-      (!compact || usesBar) && { paddingLeft: insets.left, paddingRight: insets.right },
-    ],
-    [style, compact, usesBar, insets.left, insets.right],
-  );
-  const contentInsets = useMemo(
-    () => (compact && usesBar ? { ...insets, left: 0, right: 0 } : insets),
-    [compact, usesBar, insets],
-  );
-  return (
-    <View style={surfaceStyle}>
-      <SafeAreaInsetsContext.Provider value={contentInsets}>
-        {children}
-      </SafeAreaInsetsContext.Provider>
-    </View>
+  return <View style={style}>{children}</View>;
+}
+
+/**
+ * The side insets a vertical bar of actions sits in, as left for this region. Text that runs
+ * under the side insets, like the chat, a terminal grid or a diff, stops at them so the bar's
+ * buttons never sit over it; backgrounds and rules still reach the edge.
+ */
+export function useVerticalBarInsets(): { left: number; right: number } {
+  const edge = resolveVerticalBarEdge(useWindowLayout());
+  const { left, right } = useSafeAreaInsets();
+  return useMemo(
+    () => ({ left: edge === "left" ? left : 0, right: edge === "right" ? right : 0 }),
+    [edge, left, right],
   );
 }
 

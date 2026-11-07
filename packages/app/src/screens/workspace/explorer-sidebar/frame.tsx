@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View, type LayoutChangeEvent } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
@@ -10,6 +10,12 @@ import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import { RetainedPanelActivity } from "@/components/retained-panel";
 import { resolveExplorerSidebarWidth } from "@/components/explorer-sidebar-layout";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
+import {
+  HorizontalSafeAreaRegion,
+  TopRowExtraInsetsProvider,
+  useTopChromeInsets,
+} from "@/components/safe-area-edges";
+import { HEADER_TOP_PADDING_MOBILE, WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import { useExplorerGeometry } from "./geometry";
 import type { ExplorerFrameProps } from "./frame-props";
 
@@ -46,6 +52,14 @@ function ExplorerFrameBase({
     resizeEnabled,
     onResize,
   });
+  // Only the tab row at the panel's top sits beside an occluded corner of a shared top band.
+  const topChrome = useTopChromeInsets(
+    WORKSPACE_SECONDARY_HEADER_HEIGHT.md + (overlay ? HEADER_TOP_PADDING_MOBILE : 0),
+  );
+  const topRowExtraInsets = useMemo(
+    () => ({ left: topChrome.paddingLeft, right: topChrome.paddingRight }),
+    [topChrome.paddingLeft, topChrome.paddingRight],
+  );
   return (
     <RetainedPanelActivity active={active}>
       <FileExplorerCloseGestureContext value={gestureRef}>
@@ -57,10 +71,17 @@ function ExplorerFrameBase({
           frameStyle={geometry.frameStyle}
           panelStyle={[{ backgroundColor: surfaceColor }, geometry.panelStyle]}
         >
-          <View style={styles.content}>
+          {/* The panel is a region like the column beside it: its panes run to its edges and
+              keep their own controls inside the insets of the window edges it touches. */}
+          <HorizontalSafeAreaRegion
+            edges={overlay ? OVERLAY_SAFE_AREA_EDGES : DOCKED_SAFE_AREA_EDGES}
+            style={styles.content}
+          >
             {resizeEnabled ? geometry.resizeHandle : null}
-            {children}
-          </View>
+            <TopRowExtraInsetsProvider value={topRowExtraInsets}>
+              {children}
+            </TopRowExtraInsetsProvider>
+          </HorizontalSafeAreaRegion>
         </MobilePanelOverlay>
       </FileExplorerCloseGestureContext>
       <View pointerEvents="none" style={styles.measurement} onLayout={measureContainer} />
@@ -75,3 +96,6 @@ const styles = StyleSheet.create({
   // Measure the workspace row even when the dock is closed. The gesture host stays in its slot.
   measurement: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
 });
+// Docked, the panel touches the window's right edge; as an overlay it covers the whole width.
+const DOCKED_SAFE_AREA_EDGES = { left: false, right: true } as const;
+const OVERLAY_SAFE_AREA_EDGES = { left: true, right: true } as const;

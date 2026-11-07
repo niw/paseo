@@ -11,7 +11,8 @@ import { usePaneContext } from "@/panels/pane-context";
 import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
-import type { Theme } from "@/styles/theme";
+import { SPACING, type Theme } from "@/styles/theme";
+import { useHorizontalSafeAreaPadding } from "@/components/safe-area-edges";
 import {
   useWorkspaceSetupStore,
   type WorkspaceSetupSnapshot,
@@ -264,6 +265,12 @@ function SetupPanel() {
 
   const isActive = useRetainedPanelActive();
   const isVisible = useAppActivelyVisible();
+  // The panel scrolls edge to edge; its commands stay inside the side insets.
+  const safeAreaPadding = useHorizontalSafeAreaPadding(SPACING[4]);
+  const contentContainerStyle = useMemo(
+    () => [styles.contentContainer, safeAreaPadding],
+    [safeAreaPadding],
+  );
   const supportsObservation = useHostFeature(serverId, "workspaceSetupObservation");
   const { snapshot, error: observationError } = useWorkspaceSetupSnapshot(
     serverId,
@@ -293,7 +300,7 @@ function SetupPanel() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={contentContainerStyle}
       testID="workspace-setup-panel"
     >
       {/* Hidden element for status — preserves testID for E2E */}

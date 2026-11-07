@@ -1,4 +1,5 @@
 import { useCallback, useMemo, type ReactNode } from "react";
+import { useTopChromeInsets } from "@/components/safe-area-edges";
 import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { router } from "expo-router";
@@ -18,7 +19,6 @@ import {
   HEADER_TOP_PADDING_MOBILE,
 } from "@/constants/layout";
 import type { ShortcutKey } from "@/utils/format-shortcut";
-import { useTopBand } from "@/window-layout";
 
 const ThemedArrowLeft = withUnistyles(ArrowLeft);
 
@@ -45,8 +45,7 @@ interface CompactHeaderProps {
  * left-aligned between them. Neither the header nor its islands draw a background, so it reads the
  * same in flow and floating over content (see `FloatingHeaderLayout`, whose fade gives the icons
  * contrast). Its height matches the old flat header, so anything
- * offset by the header height still lines up. In a window's top band it takes the top bar's
- * place, like the full header. The column hosting it reserves any window-chrome corner it owns.
+ * offset by the header height still lines up.
  */
 export function CompactHeader({
   navigation,
@@ -59,18 +58,22 @@ export function CompactHeader({
   actions,
 }: CompactHeaderProps) {
   const insets = useSafeAreaInsets();
-  const inTopBand = useTopBand() !== null;
-  const usesTitlebarHeight = inTopBand || inDesktopTitlebar;
+  // Beside an occluded corner the row shares the top inset instead of sitting below it.
+  const topChrome = useTopChromeInsets(
+    inDesktopTitlebar
+      ? HEADER_INNER_HEIGHT
+      : HEADER_INNER_HEIGHT_MOBILE + HEADER_TOP_PADDING_MOBILE,
+  );
   const rootStyle = useMemo(
     () => [
       styles.root,
       {
-        paddingTop: insets.top + (usesTitlebarHeight ? 0 : HEADER_TOP_PADDING_MOBILE),
-        marginLeft: insets.left,
-        marginRight: insets.right,
+        paddingTop: topChrome.paddingTop + (inDesktopTitlebar ? 0 : HEADER_TOP_PADDING_MOBILE),
+        marginLeft: insets.left + topChrome.paddingLeft,
+        marginRight: insets.right + topChrome.paddingRight,
       },
     ],
-    [usesTitlebarHeight, insets.top, insets.left, insets.right],
+    [inDesktopTitlebar, insets.left, insets.right, topChrome],
   );
 
   return (
@@ -78,7 +81,7 @@ export function CompactHeader({
       <View style={rootStyle}>
         <View
           style={[
-            usesTitlebarHeight ? styles.titlebarRow : styles.row,
+            inDesktopTitlebar ? styles.titlebarRow : styles.row,
             inDesktopTitlebar && styles.desktopTitlebarDividerSpace,
           ]}
         >
