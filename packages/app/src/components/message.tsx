@@ -1,6 +1,6 @@
 import { useDisclosureHold } from "@/agent-stream/disclosure";
 import { MessagePreview, MessageSender } from "@/components/user-message";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useStreamColumnInsets } from "@/agent-stream/column";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { getAgentAttachmentPillContent } from "@/attachments/attachment-pill-content";
 import { AssistantForkMenu, type AssistantForkTarget } from "@/components/assistant-fork-menu";
@@ -354,6 +354,9 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     marginTop: 0,
     marginRight: -theme.spacing[1],
   },
+  sender: {
+    alignSelf: "flex-end",
+  },
   trailingRow: {
     alignSelf: "flex-end",
     flexDirection: "row",
@@ -410,7 +413,7 @@ export const UserMessage = memo(function UserMessage({
   isPending = false,
   disableOuterSpacing,
 }: UserMessageProps) {
-  const safeAreaInsets = useSafeAreaInsets();
+  const columnInsets = useStreamColumnInsets();
   const isCompact = useIsCompactFormFactor();
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
@@ -449,17 +452,8 @@ export const UserMessage = memo(function UserMessage({
         isLastInGroup ? userMessageStylesheet.containerLastInGroup : null,
         !isFirstInGroup || !isLastInGroup ? userMessageStylesheet.containerSpacing : null,
       ],
-      // The stream runs under the side insets. The bubble sits at the trailing edge with its
-      // rewind and copy buttons, so it stays inside them.
-      { marginLeft: safeAreaInsets.left, marginRight: safeAreaInsets.right },
     ],
-    [
-      resolvedDisableOuterSpacing,
-      isFirstInGroup,
-      isLastInGroup,
-      safeAreaInsets.left,
-      safeAreaInsets.right,
-    ],
+    [resolvedDisableOuterSpacing, isFirstInGroup, isLastInGroup],
   );
   const imagePreviewContainerStyle = useMemo(
     () => [
@@ -475,14 +469,24 @@ export const UserMessage = memo(function UserMessage({
     ],
     [hasText],
   );
+  // The bubble runs under a side inset like the stream's text; the sender button above it and its
+  // timestamp, rewind and copy buttons below it stay inside the insets.
+  const senderStyle = useMemo(
+    () => [
+      userMessageStylesheet.sender,
+      { marginLeft: columnInsets.left, marginRight: columnInsets.right },
+    ],
+    [columnInsets.left, columnInsets.right],
+  );
   const trailingRowStyle = useMemo(
     () => [
       userMessageStylesheet.trailingRow,
       showTrailingRow
         ? userMessageStylesheet.trailingRowVisible
         : userMessageStylesheet.trailingRowHidden,
+      { marginLeft: columnInsets.left, marginRight: columnInsets.right },
     ],
-    [showTrailingRow],
+    [columnInsets.left, columnInsets.right, showTrailingRow],
   );
 
   return (
@@ -492,7 +496,11 @@ export const UserMessage = memo(function UserMessage({
         onPointerEnter={handlePointerEnter}
         onPointerLeave={handlePointerLeave}
       >
-        {sender ? <MessageSender sender={sender} serverId={serverId} /> : null}
+        {sender ? (
+          <View style={senderStyle}>
+            <MessageSender sender={sender} serverId={serverId} />
+          </View>
+        ) : null}
         <View style={userMessageStylesheet.bubble}>
           <MessagePreview itemId={itemId}>
             {hasImages ? (
