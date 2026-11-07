@@ -1,6 +1,6 @@
 import { ComposerDockBackground } from "@/composer/dock";
 import { useTopChromeInsets } from "@/components/safe-area-edges";
-import { useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import type { LayoutChangeEvent } from "react-native";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,6 +13,12 @@ import {
 } from "@/constants/layout";
 import { WindowChromeSafeArea } from "@/utils/desktop-window";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
+
+/**
+ * The least width the left group needs: the sidebar toggle, a readable title and its actions.
+ * Below it the right group moves to a second row instead of covering the left one.
+ */
+const MIN_LEFT_GROUP_WIDTH = 160;
 
 interface ScreenHeaderProps {
   left?: ReactNode;
@@ -49,9 +55,22 @@ export function ScreenHeader({
     () => [styles.inner, { paddingTop: topChrome.paddingTop + topPadding }],
     [topChrome.paddingTop, topPadding],
   );
-  const rowStyle = useMemo(() => [styles.row, borderless && styles.borderless], [borderless]);
+  const stack = useStackedRightGroup(right !== undefined && right !== null);
+  const rowStyle = useMemo(
+    () => [styles.row, (borderless || stack.stacked) && styles.borderless],
+    [borderless, stack.stacked],
+  );
+  const secondRowStyle = useMemo(
+    () => [styles.row, styles.secondRow, borderless && styles.borderless],
+    [borderless],
+  );
   const leftCombinedStyle = useMemo(() => [styles.left, leftStyle], [leftStyle]);
   const rightCombinedStyle = useMemo(() => [styles.right, rightStyle], [rightStyle]);
+  const rightGroup = (
+    <View style={rightCombinedStyle} onLayout={stack.measureRight}>
+      {right}
+    </View>
+  );
 
   return (
     <ComposerDockBackground style={styles.header} testID="composer-dock-header">
@@ -66,12 +85,52 @@ export function ScreenHeader({
           style={rowStyle}
         >
           <TitlebarDragRegion />
-          <View style={leftCombinedStyle}>{left}</View>
-          <View style={rightCombinedStyle}>{right}</View>
+          <View style={leftCombinedStyle} onLayout={stack.measureLeft}>
+            {left}
+          </View>
+          {stack.stacked ? null : rightGroup}
         </WindowChromeSafeArea>
+        {stack.stacked ? (
+          <WindowChromeSafeArea
+            placement="inline"
+            horizontalPadding={baseHorizontalPadding}
+            paddingLeftExtra={insets.left}
+            paddingRightExtra={insets.right}
+            style={secondRowStyle}
+          >
+            {rightGroup}
+          </WindowChromeSafeArea>
+        ) : null}
       </View>
     </ComposerDockBackground>
   );
+}
+
+/**
+ * Whether the right group moves to a second row. It decides from the row's content width, which is
+ * the same in either arrangement, so moving the group never flips the decision back.
+ */
+function useStackedRightGroup(hasRight: boolean) {
+  const [contentWidth, setContentWidth] = useState(0);
+  const [rightWidth, setRightWidth] = useState(0);
+  const rightWidthRef = useRef(0);
+  const stackedRef = useRef(false);
+  const stacked =
+    hasRight && contentWidth > 0 && rightWidth > 0
+      ? contentWidth - rightWidth < MIN_LEFT_GROUP_WIDTH
+      : false;
+  stackedRef.current = stacked;
+  const measureLeft = useCallback((event: LayoutChangeEvent) => {
+    const leftWidth = event.nativeEvent.layout.width;
+    // Side by side the left group gets what the right one leaves; stacked it gets the whole row.
+    setContentWidth(stackedRef.current ? leftWidth : leftWidth + rightWidthRef.current);
+  }, []);
+  const measureRight = useCallback((event: LayoutChangeEvent) => {
+    const width = event.nativeEvent.layout.width;
+    rightWidthRef.current = width;
+    setRightWidth(width);
+  }, []);
+  return { stacked, measureLeft, measureRight };
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -107,5 +166,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   borderless: {
     borderBottomColor: "transparent",
+  },
+  secondRow: {
+    justifyContent: "flex-end",
   },
 }));

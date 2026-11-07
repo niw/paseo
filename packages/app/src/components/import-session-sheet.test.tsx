@@ -58,7 +58,8 @@ vi.mock("react-native-unistyles", () => ({
     },
 }));
 
-vi.mock("@/constants/layout", () => ({
+vi.mock("@/constants/layout", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/constants/layout")>()),
   useIsCompactFormFactor: () => false,
 }));
 

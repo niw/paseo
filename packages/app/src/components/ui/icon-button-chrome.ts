@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext } from "react";
+import { usesTouchSizing } from "@/constants/layout";
 import type { StyleProp, ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
@@ -22,7 +23,7 @@ export interface IconButtonChromeState {
 
 function resolveIconButtonFrame(size: IconButtonChromeSize, compact: boolean) {
   if (size === "large") return styles.large;
-  return compact ? styles.smallCompact : styles.small;
+  return compact || usesTouchSizing ? styles.smallCompact : styles.small;
 }
 
 interface IconButtonChromeOptions {
@@ -93,11 +94,11 @@ export function iconButtonChromeFrameStyle(
 
 export function iconButtonChromeGlyphSize(size: IconButtonChromeSize, compact = false): number {
   if (size === "large") return ICON_SIZE.md;
-  return compact ? 18 : 14;
+  return compact || usesTouchSizing ? 18 : 14;
 }
 
 export function smallIconButtonChromeFrameSize(compact = false): number {
-  return compact ? COMPACT_SMALL_ICON_BUTTON_SIZE : SMALL_ICON_BUTTON_SIZE;
+  return compact || usesTouchSizing ? COMPACT_SMALL_ICON_BUTTON_SIZE : SMALL_ICON_BUTTON_SIZE;
 }
 
 const styles = StyleSheet.create((theme) => ({

@@ -62,9 +62,11 @@ A sidebar or explorer that takes an inset grows by it, so its rows keep their wi
 - Pad a full-bleed row inside its background or border. `ScreenHeader` adds the insets to the row's
   inline padding so its bottom border still reaches the edge.
 - The composer dock's content runs under the side insets; the controls in it inset themselves, like
-  the compact New workspace pickers and the draft tab's setup fields.
-  The chat's rows take the composer's column: inside the insets, centered where the composer
-  centers once they reach `contentMaxWidth`, so no gap opens on the far side of an inset.
+  the compact New workspace pickers and the draft tab's setup fields. The chat's rows take the
+  composer's column: inside the insets, centered where the composer centers once they reach
+  `contentMaxWidth`, so no gap opens on the far side of an inset.
+- A header row that cannot fit its right group beside the sidebar toggle and title moves the right
+  group to a second row (`ScreenHeader`), so no button covers another.
 - Pad a scroll view of controls through its content container, or give it margins when its style
   already sets horizontal padding. `paddingLeft` replaces `paddingHorizontal`; it doesn't add to it.
 - Inset an absolutely positioned control with offsets on its layer. Absolute children ignore their
