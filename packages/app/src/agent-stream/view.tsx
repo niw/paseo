@@ -1,4 +1,6 @@
 import { ChatFind, ChatFindExpansion } from "@/agent-stream/chat-find";
+import { useStreamBottomOverlayInset } from "./bottom-overlay";
+import { STREAM_LIST_HORIZONTAL_PADDING, useStreamControlsRowPadding } from "./column";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import React, {
@@ -132,9 +134,9 @@ function renderLiveAuxiliaryNode(input: {
     <>
       {input.turnFooter}
       {input.pendingPermissions ? (
-        <View style={stylesheet.contentWrapper}>
+        <StreamControlsWrapper>
           <View style={stylesheet.listHeaderContent}>{input.pendingPermissions}</View>
-        </View>
+        </StreamControlsWrapper>
       ) : null}
       {input.bottomOverlayInset > 0 ? (
         <BottomOverlayInset height={input.bottomOverlayInset} />
@@ -195,7 +197,11 @@ function renderStreamItemWithTurnFooter(input: {
     />
   ) : null;
   const content = (
-    <StreamItemWrapper gapBelow={input.layoutItem.gapBelow} turnIndent={input.turnIndent}>
+    <StreamItemWrapper
+      gapBelow={input.layoutItem.gapBelow}
+      turnIndent={input.turnIndent}
+      runsUnderInsets={rowRunsUnderInsets(input.layoutItem)}
+    >
       {input.content}
     </StreamItemWrapper>
   );
@@ -319,14 +325,20 @@ function ScrollToBottomButton({
 }) {
   const { t } = useTranslation();
   const isNearBottom = useIsNearBottom(nearBottom);
-  // The stream runs under the side insets; the button centers between them.
+  // The stream runs under the side insets and behind the composer; the button centers between
+  // the insets and sits above the composer.
   const safeAreaInsets = useSafeAreaInsets();
+  const composerOverlayInset = useStreamBottomOverlayInset();
   const containerStyle = useMemo(
     () => [
       stylesheet.scrollToBottomContainer,
-      { bottom: bottomOffset, left: safeAreaInsets.left, right: safeAreaInsets.right },
+      {
+        bottom: composerOverlayInset + bottomOffset,
+        left: safeAreaInsets.left,
+        right: safeAreaInsets.right,
+      },
     ],
-    [bottomOffset, safeAreaInsets.left, safeAreaInsets.right],
+    [bottomOffset, composerOverlayInset, safeAreaInsets.left, safeAreaInsets.right],
   );
   if (isNearBottom && !isTimelineDetached) return null;
   return (
@@ -1732,8 +1744,8 @@ const stylesheet = StyleSheet.create((theme) => ({
     paddingVertical: 0,
     flexGrow: 1,
     paddingHorizontal: {
-      xs: theme.spacing[3],
-      md: theme.spacing[4],
+      xs: STREAM_LIST_HORIZONTAL_PADDING.compact,
+      md: STREAM_LIST_HORIZONTAL_PADDING.regular,
     },
   },
   forwardListContentContainer: {
@@ -1869,19 +1881,44 @@ const permissionStyles = StyleSheet.create((theme) => ({
   },
 }));
 
+/**
+ * The messages' text runs under the side insets; the user message keeps its own buttons inside.
+ * Every other row, like a tool call, a permission prompt or a plugin item, has controls, so its
+ * content stays inside the insets.
+ */
+function rowRunsUnderInsets(layoutItem: StreamLayoutItem): boolean {
+  const kind = layoutItem.item.kind;
+  return kind === "assistant_message" || kind === "user_message";
+}
+
+/** A row outside the item list, like the pending permission prompts, with its controls inside. */
+function StreamControlsWrapper({ children }: { children: ReactNode }) {
+  const controlsPadding = useStreamControlsRowPadding();
+  const style = useMemo(() => [stylesheet.contentWrapper, controlsPadding], [controlsPadding]);
+  return <View style={style}>{children}</View>;
+}
+
 interface StreamItemWrapperProps {
   gapBelow: number;
   turnIndent: TurnIndent;
+  runsUnderInsets: boolean;
   children: ReactNode;
 }
 
-function StreamItemWrapper({ gapBelow, turnIndent, children }: StreamItemWrapperProps) {
+function StreamItemWrapper({
+  gapBelow,
+  turnIndent,
+  runsUnderInsets,
+  children,
+}: StreamItemWrapperProps) {
+  const controlsPadding = useStreamControlsRowPadding();
   const wrapperStyle = useMemo(
     () => [
       stylesheet.streamItemWrapper,
       { marginBottom: turnIndent === "nested" || turnIndent === "openedHost" ? 0 : gapBelow },
+      runsUnderInsets ? null : controlsPadding,
     ],
-    [gapBelow, turnIndent],
+    [controlsPadding, gapBelow, runsUnderInsets, turnIndent],
   );
   const gapStyle = useMemo(() => ({ paddingBottom: gapBelow }), [gapBelow]);
   switch (turnIndent) {

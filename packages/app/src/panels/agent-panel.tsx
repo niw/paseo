@@ -21,6 +21,7 @@ import invariant from "tiny-invariant";
 import { shallow, useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useAgentStreamTail } from "@/agent-stream/use-agent-stream-tail";
+import { useStreamBottomOverlayInset } from "@/agent-stream/bottom-overlay";
 import { AgentStreamView, type AgentStreamViewHandle } from "@/agent-stream/view";
 import { CHAT_COLUMN_RAIL_DATASET, ChatColumnRailSurface } from "@/chat-rail";
 import { ArchivedAgentCallout } from "@/components/archived-agent-callout";
@@ -1375,7 +1376,9 @@ function ChatSurface({
     <OverlayDismissalScope>
       <ChatColumnRailSurface serverId={serverId}>
         <FileDropZone style={styles.container} disabled={disabled}>
-          <ComposerDock fullscreen={fullscreen}>{children}</ComposerDock>
+          <ComposerDock fullscreen={fullscreen} contentUnderComposer>
+            {children}
+          </ComposerDock>
         </FileDropZone>
       </ChatColumnRailSurface>
     </OverlayDismissalScope>
@@ -1390,8 +1393,14 @@ function TimelineSyncErrorCallout({
   onRetry: () => void;
 }) {
   const { t } = useTranslation();
+  // The stream runs behind a floating composer; the callout rests on the composer's top edge.
+  const composerOverlayInset = useStreamBottomOverlayInset();
+  const railStyle = useMemo(
+    () => [styles.timelineSyncCalloutRail, { marginBottom: composerOverlayInset }],
+    [composerOverlayInset],
+  );
   return (
-    <View style={styles.timelineSyncCalloutRail} dataSet={CHAT_COLUMN_RAIL_DATASET}>
+    <View style={railStyle} dataSet={CHAT_COLUMN_RAIL_DATASET}>
       <View style={styles.timelineSyncCalloutContent}>
         <View style={styles.timelineSyncCallout} testID="agent-timeline-sync-error">
           <Text style={styles.timelineSyncCalloutText}>
