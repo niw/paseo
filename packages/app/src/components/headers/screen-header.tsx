@@ -1,5 +1,4 @@
 import { ComposerDockBackground } from "@/composer/dock";
-import { useTopChromeInsets } from "@/components/safe-area-edges";
 import { useMemo, type ReactNode } from "react";
 import type { LayoutChangeEvent } from "react-native";
 import { View, type StyleProp, type ViewStyle } from "react-native";
@@ -11,7 +10,7 @@ import {
   HEADER_TOP_PADDING_MOBILE,
   useIsCompactFormFactor,
 } from "@/constants/layout";
-import { WindowChromeSafeArea } from "@/utils/desktop-window";
+import { TopChromeStack, WindowChromeSafeArea } from "@/utils/desktop-window";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 
 interface ScreenHeaderProps {
@@ -42,34 +41,35 @@ export function ScreenHeader({
   const topPadding = isMobile ? HEADER_TOP_PADDING_MOBILE : 0;
   const baseHorizontalPadding = isMobile ? theme.spacing[2] : theme.spacing[3];
 
-  // Beside an occluded corner the row shares the top inset instead of sitting below it.
+  // The header's rows are a top chrome stack: beside a block that covers a top corner they share
+  // the top inset instead of sitting below it. In a stack of its screen's top rows, like the
+  // workspace header above its tab row, the outer stack places them.
   const rowHeight = isMobile ? HEADER_INNER_HEIGHT_MOBILE : HEADER_INNER_HEIGHT;
-  const topChrome = useTopChromeInsets(rowHeight + topPadding);
-  const innerStyle = useMemo(
-    () => [styles.inner, { paddingTop: topChrome.paddingTop + topPadding }],
-    [topChrome.paddingTop, topPadding],
-  );
+  const innerStyle = useMemo(() => ({ paddingTop: topPadding }), [topPadding]);
   const rowStyle = useMemo(() => [styles.row, borderless && styles.borderless], [borderless]);
   const leftCombinedStyle = useMemo(() => [styles.left, leftStyle], [leftStyle]);
   const rightCombinedStyle = useMemo(() => [styles.right, rightStyle], [rightStyle]);
 
   return (
     <ComposerDockBackground style={styles.header} testID="composer-dock-header">
-      <View style={innerStyle}>
-        <WindowChromeSafeArea
-          placement="inline"
-          horizontalPadding={baseHorizontalPadding}
-          // The row and its border run under the horizontal insets; its controls stay inside.
-          paddingLeftExtra={insets.left + topChrome.paddingLeft}
-          paddingRightExtra={insets.right + topChrome.paddingRight}
-          onLayout={onRowLayout}
-          style={rowStyle}
-        >
-          <TitlebarDragRegion />
-          <View style={leftCombinedStyle}>{left}</View>
-          <View style={rightCombinedStyle}>{right}</View>
-        </WindowChromeSafeArea>
-      </View>
+      <TopChromeStack estimatedHeight={rowHeight + topPadding}>
+        <View style={innerStyle}>
+          <WindowChromeSafeArea
+            placement="inline"
+            horizontalPadding={baseHorizontalPadding}
+            // The row and its border run under the horizontal insets; its controls stay inside,
+            // and the safe area moves its ends in past the window's top corners.
+            paddingLeftExtra={insets.left}
+            paddingRightExtra={insets.right}
+            onLayout={onRowLayout}
+            style={rowStyle}
+          >
+            <TitlebarDragRegion />
+            <View style={leftCombinedStyle}>{left}</View>
+            <View style={rightCombinedStyle}>{right}</View>
+          </WindowChromeSafeArea>
+        </View>
+      </TopChromeStack>
     </ComposerDockBackground>
   );
 }
@@ -78,7 +78,6 @@ const styles = StyleSheet.create((theme) => ({
   header: {
     backgroundColor: theme.colors.surface0,
   },
-  inner: {},
   row: {
     position: "relative",
     height: {

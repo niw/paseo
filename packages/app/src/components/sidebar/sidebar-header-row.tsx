@@ -9,6 +9,7 @@ import {
 import { Pressable, Text, View } from "react-native";
 import { SPACING } from "@/styles/theme";
 import { usePaddedSideInsets } from "@/components/padded-side-insets";
+import { useWindowChromeCornerInsets } from "@/utils/desktop-window";
 import { StyleSheet } from "react-native-unistyles";
 import { HEADER_INNER_HEIGHT, HEADER_INNER_HEIGHT_MOBILE } from "@/constants/layout";
 import { DensityIcon } from "@/components/ui/density-icon";
@@ -69,19 +70,21 @@ export function SidebarHeaderRow({
   const handlePressOut = useCallback(() => setIsPressed(false), []);
   const isHighlighted = isHovered || isActive;
   // The header row's bottom rule reaches the sidebar's edges past a side inset; the row's content
-  // keeps its own padding inside the inset.
+  // keeps its own padding inside the inset. It is the sidebar's top row, so it also clears the
+  // window's top corners.
   const padded = usePaddedSideInsets();
+  const cornerInsets = useWindowChromeCornerInsets();
   const headerBleedStyle = useMemo(
     () =>
       variant === "header"
         ? {
             marginLeft: -padded.left,
             marginRight: -padded.right,
-            paddingLeft: SPACING[2] + padded.left,
-            paddingRight: SPACING[2] + padded.right,
+            paddingLeft: SPACING[2] + padded.left + cornerInsets.left,
+            paddingRight: SPACING[2] + padded.right + cornerInsets.right,
           }
         : null,
-    [padded.left, padded.right, variant],
+    [cornerInsets.left, cornerInsets.right, padded.left, padded.right, variant],
   );
   const iconSize = variant === "header" ? "md" : "sm";
 

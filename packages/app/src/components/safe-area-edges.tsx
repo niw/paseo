@@ -14,75 +14,74 @@ export interface HorizontalSafeAreaEdges {
   right: boolean;
 }
 
+/** What covers the window's top: the shareable band, the display's corners and the insets. */
+export interface TopChromeGeometry {
+  band: TopBand | null;
+  topInset: number;
+  /** The window's side insets, which a row at the top already pads by. */
+  insets: { left: number; right: number };
+  /** The radius of each top display corner. */
+  radii: { left: number; right: number };
+}
+
+const NO_TOP_CHROME_GEOMETRY: TopChromeGeometry = {
+  band: null,
+  topInset: 0,
+  insets: { left: 0, right: 0 },
+  radii: { left: 0, right: 0 },
+};
+
 const WindowSafeAreaInsetsContext = createContext<EdgeInsets | null>(null);
-const TopBandContext = createContext<TopBand | null>(null);
-const TopRowExtraInsetsContext = createContext<{ left: number; right: number }>({
-  left: 0,
-  right: 0,
-});
+const TopChromeGeometryContext = createContext<TopChromeGeometry>(NO_TOP_CHROME_GEOMETRY);
+/** Which window edges this region touches, for the corners on those edges. */
+const RegionEdgesContext = createContext<HorizontalSafeAreaEdges>({ left: true, right: true });
 
 /**
- * Publishes the shareable part of the window's top inset; see `resolveTopBand`. Render it once,
+ * Publishes what covers the window's top: the shareable part of the top inset (see
+ * `resolveTopBand`) and the display's top corners. Top rows read it through `TopChromeStack`,
+ * `WindowChromeSafeArea` and `useTopChromeInsets` in `utils/desktop-window.tsx`. Render it once,
  * under the app's SafeAreaProvider and above every HorizontalSafeAreaRegion.
  */
 export function TopBandProvider({ children }: { children: ReactNode }) {
   const [snapshot, setSnapshot] = useState<ReservedRegionsSnapshot | null>(null);
   useEffect(() => subscribeReservedRegions(setSnapshot), []);
   const { width: windowWidth } = useWindowDimensions();
-  const { top: topInset } = useSafeAreaInsets();
-  const value = useMemo(
+  const { top: topInset, left: insetLeft, right: insetRight } = useSafeAreaInsets();
+  const band = useMemo(
     () => resolveTopBand({ windowWidth, topInset, snapshot }),
     [snapshot, topInset, windowWidth],
   );
-  return <TopBandContext.Provider value={value}>{children}</TopBandContext.Provider>;
-}
-
-/**
- * Where a row at the top of this region goes. When the top inset is shareable, the row sits at
- * the bottom of the band, beside the occluded corners, instead of below the whole band. Pass the
- * row's height; the result replaces `insets.top` as its top padding.
- */
-export function useTopChromeInsets(rowHeight: number): {
-  paddingTop: number;
-  paddingLeft: number;
-  paddingRight: number;
-} {
-  const band = useContext(TopBandContext);
-  const { top } = useSafeAreaInsets();
-  return useMemo(() => {
-    if (!band) return { paddingTop: top, paddingLeft: 0, paddingRight: 0 };
-    return {
-      paddingTop: Math.max(band.height - rowHeight, 0),
-      paddingLeft: band.left,
-      paddingRight: band.right,
-    };
-  }, [band, rowHeight, top]);
-}
-
-/**
- * Hands a region's top-band corners to the row at its top when the region pads its own top, like
- * the explorer panel: only that row sits beside the occluded corner.
- */
-export function TopRowExtraInsetsProvider({
-  value,
-  children,
-}: {
-  value: { left: number; right: number };
-  children: ReactNode;
-}) {
+  const radiusLeft = snapshot?.cornerRadii?.topLeft ?? 0;
+  const radiusRight = snapshot?.cornerRadii?.topRight ?? 0;
+  const geometry = useMemo(
+    () => ({
+      band,
+      topInset,
+      insets: { left: insetLeft, right: insetRight },
+      radii: { left: radiusLeft, right: radiusRight },
+    }),
+    [band, insetLeft, insetRight, radiusLeft, radiusRight, topInset],
+  );
   return (
-    <TopRowExtraInsetsContext.Provider value={value}>{children}</TopRowExtraInsetsContext.Provider>
+    <TopChromeGeometryContext.Provider value={geometry}>
+      {children}
+    </TopChromeGeometryContext.Provider>
   );
 }
 
-/** Extra side padding for the row at the top of a region; see TopRowExtraInsetsProvider. */
-export function useTopRowExtraInsets(): { left: number; right: number } {
-  return useContext(TopRowExtraInsetsContext);
+export function useTopChromeGeometry(): TopChromeGeometry {
+  return useContext(TopChromeGeometryContext);
+}
+
+/** The window edges this region touches; see `HorizontalSafeAreaRegion`. */
+export function useRegionEdges(): HorizontalSafeAreaEdges {
+  return useContext(RegionEdgesContext);
 }
 
 /**
  * For a surface that pads its content by the side insets: the content sees none left, so nothing
- * pads them twice. The content still touches the same window edges.
+ * pads them twice. The content still touches the same window edges, so a row at its top still
+ * clears the corners.
  */
 export function ConsumeSideInsets({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
@@ -121,21 +120,20 @@ export function HorizontalSafeAreaRegion({
     () => ({ top: insets.top, bottom: insets.bottom, left, right }),
     [insets.top, insets.bottom, left, right],
   );
-  // The top band's occluded corners narrow the same way: a region keeps the corners on its edges.
-  const band = useContext(TopBandContext);
-  const bandLeft = band && edges.left ? band.left : 0;
-  const bandRight = band && edges.right ? band.right : 0;
-  const regionBand = useMemo(
-    () => (band ? { height: band.height, left: bandLeft, right: bandRight } : null),
-    [band, bandLeft, bandRight],
+  const parentEdges = useContext(RegionEdgesContext);
+  const touchesLeft = parentEdges.left && edges.left;
+  const touchesRight = parentEdges.right && edges.right;
+  const regionEdges = useMemo(
+    () => ({ left: touchesLeft, right: touchesRight }),
+    [touchesLeft, touchesRight],
   );
   return (
     <WindowSafeAreaInsetsContext.Provider value={windowInsets}>
-      <TopBandContext.Provider value={regionBand}>
+      <RegionEdgesContext.Provider value={regionEdges}>
         <SafeAreaInsetsContext.Provider value={regionInsets}>
           {style === undefined ? children : <View style={style}>{children}</View>}
         </SafeAreaInsetsContext.Provider>
-      </TopBandContext.Provider>
+      </RegionEdgesContext.Provider>
     </WindowSafeAreaInsetsContext.Provider>
   );
 }

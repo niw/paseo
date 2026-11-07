@@ -1,5 +1,21 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { View, type ViewProps } from "react-native";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import {
+  View,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type ViewProps,
+  type ViewStyle,
+} from "react-native";
 import {
   DESKTOP_TRAFFIC_LIGHT_HEIGHT,
   DESKTOP_TRAFFIC_LIGHT_WIDTH,
@@ -12,6 +28,14 @@ import {
   getDesktopWindowControlsWidth,
 } from "@/desktop/window-chrome-presentation";
 import { isNative } from "@/constants/platform";
+import { useRegionEdges, useTopChromeGeometry } from "@/components/safe-area-edges";
+import {
+  resolveTopRowClearance,
+  resolveTopStackPadding,
+  TOP_ROW_HEIGHT,
+  type TopChromeSides,
+  type TopRowClearance,
+} from "@/components/top-band";
 
 export type WindowChromeCorners = "none" | "top-left" | "top-right" | "both";
 type WindowChromeSafeAreaPlacement = "inline" | "below";
@@ -293,6 +317,188 @@ export function useHasOwnedWindowChromeObstruction(corner: WindowChromeCorner): 
   return resolveHasOwnedWindowChromeObstruction({ obstruction, corners, corner });
 }
 
+/**
+ * The top corners a stack of rows at the top of this region sits in: those the region owns
+ * (`WindowChromeRegion`) on window edges it touches (`HorizontalSafeAreaRegion`).
+ */
+function useTopChromeSides(): TopChromeSides {
+  const corners = useContext(WindowChromeCornersContext);
+  const edges = useRegionEdges();
+  const left = edges.left && windowChromeCornersInclude(corners, "top-left");
+  const right = edges.right && windowChromeCornersInclude(corners, "top-right");
+  return useMemo(() => ({ left, right }), [left, right]);
+}
+
+interface TopChromeStackState {
+  hostRef: RefObject<View | null>;
+  sides: TopChromeSides;
+  paddingTop: number;
+  /** Changes whenever the rows in the stack can have moved. */
+  layoutVersion: number;
+}
+
+const TopChromeStackContext = createContext<TopChromeStackState | null>(null);
+
+interface TopChromeStackProps {
+  style?: StyleProp<ViewStyle>;
+  /** The rows' height before they are measured, so the first frame lands close. */
+  estimatedHeight?: number;
+  children: ReactNode;
+}
+
+/**
+ * The rows at the top of a region, like a header and its tab row. The stack replaces
+ * `insets.top` with `resolveTopStackPadding`: beside a block that covers one top corner, like
+ * iPhone Duo's camera and status block, rows that reach the block's bottom start at the window's
+ * top, and each row in the stack moves its ends in past the block where it sits beside it
+ * (`useTopChromeRow`). A stack inside another stack adds nothing; the outer one places its rows.
+ */
+export function TopChromeStack({ style, estimatedHeight, children }: TopChromeStackProps) {
+  const parent = useContext(TopChromeStackContext);
+  if (parent) return <View style={style}>{children}</View>;
+  return (
+    <RootTopChromeStack style={style} estimatedHeight={estimatedHeight}>
+      {children}
+    </RootTopChromeStack>
+  );
+}
+
+function RootTopChromeStack({
+  style,
+  estimatedHeight = TOP_ROW_HEIGHT,
+  children,
+}: TopChromeStackProps) {
+  const { band, topInset } = useTopChromeGeometry();
+  const sides = useTopChromeSides();
+  const hostRef = useRef<View>(null);
+  const [contentHeight, setContentHeight] = useState<number | null>(null);
+  const [layoutVersion, setLayoutVersion] = useState(0);
+  const paddingTop = resolveTopStackPadding({
+    band,
+    topInset,
+    sides,
+    contentHeight: contentHeight ?? estimatedHeight,
+  });
+  // The content moves when the padding changes and resizes when a row does; either moves rows.
+  const handleContentLayout = useCallback((event: LayoutChangeEvent) => {
+    setContentHeight(event.nativeEvent.layout.height);
+    setLayoutVersion((version) => version + 1);
+  }, []);
+  const hostStyle = useMemo(() => [style, { paddingTop }], [paddingTop, style]);
+  const state = useMemo(
+    () => ({ hostRef, sides, paddingTop, layoutVersion }),
+    [layoutVersion, paddingTop, sides],
+  );
+  return (
+    <View ref={hostRef} style={hostStyle} collapsable={false}>
+      <View onLayout={handleContentLayout}>
+        <TopChromeStackContext.Provider value={state}>{children}</TopChromeStackContext.Provider>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Top padding for a single row at the top of this region that is not in a `TopChromeStack`,
+ * such as a sidebar's first row or the explorer's tab rail. Pass the row's height; `paddingTop`
+ * replaces `insets.top`. Inside a stack it is 0: the stack pads its rows.
+ */
+export function useTopChromeInsets(rowHeight: number): { paddingTop: number } {
+  const stack = useContext(TopChromeStackContext);
+  const { band, topInset } = useTopChromeGeometry();
+  const sides = useTopChromeSides();
+  const paddingTop = stack
+    ? 0
+    : resolveTopStackPadding({ band, topInset, sides, contentHeight: rowHeight });
+  return useMemo(() => ({ paddingTop }), [paddingTop]);
+}
+
+const NO_CLEARANCE: TopRowClearance = { left: 0, right: 0 };
+
+function useTopRowClearance(
+  sides: TopChromeSides,
+  row: { top: number; height: number } | null,
+): TopRowClearance {
+  const { band, insets, radii } = useTopChromeGeometry();
+  const top = row?.top ?? null;
+  const height = row?.height ?? 0;
+  const clearance =
+    top === null
+      ? NO_CLEARANCE
+      : resolveTopRowClearance({ band, sides, insets, radii, row: { top, height } });
+  const { left, right } = clearance;
+  return useMemo(() => ({ left, right }), [left, right]);
+}
+
+/**
+ * Where a row at the top of this region would sit alone: a touch-sized row at the bottom of the
+ * stack padding. For rows that are not measured in a `TopChromeStack`.
+ */
+function useUnmeasuredTopRow(sides: TopChromeSides): { top: number; height: number } {
+  const { band, topInset } = useTopChromeGeometry();
+  const top = resolveTopStackPadding({ band, topInset, sides, contentHeight: TOP_ROW_HEIGHT });
+  return useMemo(() => ({ top, height: TOP_ROW_HEIGHT }), [top]);
+}
+
+/**
+ * How far a row at the top of this region moves its ends in, beyond the side insets, to clear
+ * what covers the window's top corners: the display's rounded corners and a block that covers a
+ * corner of the top band. Only for the corners this region's top row owns (`WindowChromeRegion`)
+ * on window edges the region touches (`HorizontalSafeAreaRegion`). For a single top row outside a
+ * `TopChromeStack`; a row in a stack reads `useTopChromeRow`, and `WindowChromeSafeArea` does.
+ */
+export function useWindowChromeCornerInsets(): TopRowClearance {
+  const sides = useTopChromeSides();
+  const row = useUnmeasuredTopRow(sides);
+  return useTopRowClearance(sides, row);
+}
+
+/**
+ * A row in a `TopChromeStack`: attach `ref` and `onLayout` to the row's outer view and add
+ * `left` and `right` to its inline padding. The stack measures where the row sits and the row
+ * moves its ends in past whatever covers the window's top corners beside it. Outside a stack the
+ * row is the region's single top row (`useWindowChromeCornerInsets`).
+ */
+export function useTopChromeRow(): TopRowClearance & {
+  ref: RefObject<View | null>;
+  onLayout: () => void;
+} {
+  const stack = useContext(TopChromeStackContext);
+  const regionSides = useTopChromeSides();
+  const unmeasuredRow = useUnmeasuredTopRow(regionSides);
+  const ref = useRef<View>(null);
+  const [frame, setFrame] = useState<{ top: number; height: number } | null>(null);
+  const hostRef = stack?.hostRef ?? null;
+  const layoutVersion = stack?.layoutVersion ?? 0;
+  const measure = useCallback(() => {
+    const row = ref.current;
+    const host = hostRef?.current;
+    if (!row || !host) return;
+    row.measureLayout(
+      host,
+      (_left, top, _width, height) => {
+        setFrame((previous) =>
+          previous?.top === top && previous.height === height ? previous : { top, height },
+        );
+      },
+      () => undefined,
+    );
+  }, [hostRef]);
+  useEffect(() => {
+    measure();
+  }, [layoutVersion, measure]);
+  // Before the first measurement a row in a stack is taken for the stack's first row.
+  const stackRow = frame ?? (stack ? { top: stack.paddingTop, height: TOP_ROW_HEIGHT } : null);
+  const clearance = useTopRowClearance(
+    stack ? stack.sides : regionSides,
+    stack ? stackRow : unmeasuredRow,
+  );
+  return useMemo(
+    () => ({ ref, onLayout: measure, left: clearance.left, right: clearance.right }),
+    [clearance.left, clearance.right, measure],
+  );
+}
+
 type WindowChromeSafeAreaProps = ViewProps & {
   placement: WindowChromeSafeAreaPlacement;
   horizontalPadding?: number;
@@ -307,20 +513,42 @@ export function WindowChromeSafeArea({
   paddingLeftExtra = 0,
   paddingRightExtra = 0,
   style,
+  onLayout,
   ...props
 }: WindowChromeSafeAreaProps) {
   const obstruction = useContext(WindowChromeContext);
   const corners = useContext(WindowChromeCornersContext);
+  // What covers the window's top corners never pushes a row down; an inline row moves its ends
+  // in past it.
+  const cornerInsets = useTopChromeRow();
   const safeAreaStyle = useMemo(() => {
     const resolved = resolveWindowChromeSafeArea({ obstruction, corners, placement });
     if (placement === "below") return resolved;
     const paddingLeft = "paddingLeft" in resolved ? resolved.paddingLeft : 0;
     const paddingRight = "paddingRight" in resolved ? resolved.paddingRight : 0;
     return {
-      paddingLeft: paddingLeft + horizontalPadding + paddingLeftExtra,
-      paddingRight: paddingRight + horizontalPadding + paddingRightExtra,
+      paddingLeft: Math.max(paddingLeft, cornerInsets.left) + horizontalPadding + paddingLeftExtra,
+      paddingRight:
+        Math.max(paddingRight, cornerInsets.right) + horizontalPadding + paddingRightExtra,
     };
-  }, [corners, horizontalPadding, obstruction, paddingLeftExtra, paddingRightExtra, placement]);
+  }, [
+    cornerInsets.left,
+    cornerInsets.right,
+    corners,
+    horizontalPadding,
+    obstruction,
+    paddingLeftExtra,
+    paddingRightExtra,
+    placement,
+  ]);
   const combinedStyle = useMemo(() => [style, safeAreaStyle], [safeAreaStyle, style]);
-  return <View {...props} style={combinedStyle} />;
+  const measureRow = cornerInsets.onLayout;
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      measureRow();
+      onLayout?.(event);
+    },
+    [measureRow, onLayout],
+  );
+  return <View {...props} ref={cornerInsets.ref} onLayout={handleLayout} style={combinedStyle} />;
 }
