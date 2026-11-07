@@ -169,6 +169,7 @@ import {
   WorkspaceHeaderExplorerToggle,
 } from "@/screens/workspace/workspace-explorer-toggle";
 import {
+  TopChromeStack,
   useHasWindowChromeObstruction,
   WindowChromeRegion,
   WindowChromeSafeArea,
@@ -221,7 +222,12 @@ import {
   useModifiedPanelTabIds,
 } from "@/panels/panel-instance-attributes";
 import { findAdjacentPane } from "@/utils/split-navigation";
-import { supportsDesktopPaneSplits, useIsCompactFormFactor } from "@/constants/layout";
+import {
+  HEADER_INNER_HEIGHT,
+  supportsDesktopPaneSplits,
+  useIsCompactFormFactor,
+  WORKSPACE_SECONDARY_HEADER_HEIGHT,
+} from "@/constants/layout";
 import { getIsElectron, isNative, isWeb } from "@/constants/platform";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { useWorkspaceTerminals } from "@/screens/workspace/terminals/use-workspace-terminals";
@@ -885,6 +891,17 @@ function WorkspaceDocumentTitleEffectSlot({
  */
 function floatsHeaderOverContent(activeTab: WorkspaceTabDescriptor | null): boolean {
   return supportsStreamTopOverlay && (activeTab?.kind === "agent" || activeTab?.kind === "draft");
+}
+
+/**
+ * The window corners the column's body owns. Below the header it owns none; split panes declare
+ * their own. `WindowChromeRegion` narrows what it inherits, so "both" keeps the column's corners.
+ */
+function resolveDesktopBodyCorners(input: {
+  rendersSplitContent: boolean;
+  showsHeader: boolean;
+}): "none" | "both" {
+  return !input.rendersSplitContent && input.showsHeader ? "none" : "both";
 }
 
 /** A fullscreen composer covers the compact header; the column lays out without it. */
@@ -3689,6 +3706,10 @@ function WorkspaceScreenContent({
     composerFullscreen: useComposerTabFullscreen(workspacePanelKey, activeTabId),
   });
 
+  const desktopBodyCorners = resolveDesktopBodyCorners({
+    rendersSplitContent: rendersDesktopSplitContent,
+    showsHeader: showScreenHeader,
+  });
   const desktopCenterColumnSafeAreaEdges = useDesktopCenterColumnSafeAreaEdges(
     isExplorerSidebarShowing,
     desktopFocusModeEnabled,
@@ -3702,7 +3723,10 @@ function WorkspaceScreenContent({
       >
         {(topOverlayInset) => (
           <StreamTopOverlayProvider value={topOverlayInset}>
-            <View style={styles.content}>{content}</View>
+            {/* The header is the top row; the panes under it own no window corner. */}
+            <WindowChromeRegion corners="none">
+              <View style={styles.content}>{content}</View>
+            </WindowChromeRegion>
           </StreamTopOverlayProvider>
         )}
       </FloatingHeaderLayout>
@@ -3714,44 +3738,54 @@ function WorkspaceScreenContent({
       focusModeEnabled={desktopFocusModeEnabled}
       safeAreaEdges={desktopCenterColumnSafeAreaEdges}
     >
+      {/* The header and the tab row are the column's top rows: beside a block that covers a top
+          corner, like iPhone Duo's camera and status block, both share the top inset. */}
       {rendersDesktopSplitContent ? null : (
-        <AdaptiveWorkspaceChrome compactHeader={centerColumnCompactHeader}>
-          {fullWorkspaceActions}
-          {renderWorkspaceScreenHeader()}
+        <TopChromeStack
+          style={styles.topChrome}
+          estimatedHeight={HEADER_INNER_HEIGHT + WORKSPACE_SECONDARY_HEADER_HEIGHT.md}
+        >
+          <AdaptiveWorkspaceChrome compactHeader={centerColumnCompactHeader}>
+            {fullWorkspaceActions}
+            {renderWorkspaceScreenHeader()}
 
-          {shouldRenderDesktopPaneFallback ? (
-            <NewTabLauncherProvider value={newTabLauncher}>
-              <WorkspaceDesktopTabsRow
-                paneId={focusedPaneIdOrUndefined}
-                ownsKeyboardShortcuts={false}
-                isFocused={isRouteFocused}
-                tabs={desktopTabRowItems}
-                normalizedServerId={normalizedServerId}
-                normalizedWorkspaceId={normalizedWorkspaceId}
-                setHoveredCloseTabKey={setHoveredCloseTabKey}
-                onNavigateTab={navigateToTabId}
-                onCloseTab={handleCloseTabById}
-                onCopyResumeCommand={handleCopyResumeCommand}
-                onCopyAgentId={handleCopyAgentId}
-                onCopyTerminalId={handleCopyTerminalId}
-                onCopyFilePath={handleCopyFilePath}
-                onReloadAgent={handleReloadAgent}
-                onRenameTab={handleRenameTab}
-                onCloseTabsToLeft={handleCloseTabsToLeft}
-                onCloseTabsToRight={handleCloseTabsToRight}
-                onCloseOtherTabs={handleCloseOtherTabs}
-                onCreateNewTab={handleCreateNewTab}
-                onReorderTabs={handleReorderTabsInFocusedPane}
-                focusModeEnabled={desktopFocusModeEnabled}
-                onExitFocusMode={toggleFocusMode}
-              />
-            </NewTabLauncherProvider>
-          ) : null}
-        </AdaptiveWorkspaceChrome>
+            {shouldRenderDesktopPaneFallback ? (
+              <NewTabLauncherProvider value={newTabLauncher}>
+                <WorkspaceDesktopTabsRow
+                  paneId={focusedPaneIdOrUndefined}
+                  ownsKeyboardShortcuts={false}
+                  isFocused={isRouteFocused}
+                  tabs={desktopTabRowItems}
+                  normalizedServerId={normalizedServerId}
+                  normalizedWorkspaceId={normalizedWorkspaceId}
+                  setHoveredCloseTabKey={setHoveredCloseTabKey}
+                  onNavigateTab={navigateToTabId}
+                  onCloseTab={handleCloseTabById}
+                  onCopyResumeCommand={handleCopyResumeCommand}
+                  onCopyAgentId={handleCopyAgentId}
+                  onCopyTerminalId={handleCopyTerminalId}
+                  onCopyFilePath={handleCopyFilePath}
+                  onReloadAgent={handleReloadAgent}
+                  onRenameTab={handleRenameTab}
+                  onCloseTabsToLeft={handleCloseTabsToLeft}
+                  onCloseTabsToRight={handleCloseTabsToRight}
+                  onCloseOtherTabs={handleCloseOtherTabs}
+                  onCreateNewTab={handleCreateNewTab}
+                  onReorderTabs={handleReorderTabsInFocusedPane}
+                  focusModeEnabled={desktopFocusModeEnabled}
+                  onExitFocusMode={toggleFocusMode}
+                />
+              </NewTabLauncherProvider>
+            ) : null}
+          </AdaptiveWorkspaceChrome>
+        </TopChromeStack>
       )}
-      <View style={styles.centerContent}>
-        <View style={styles.content}>{desktopContent}</View>
-      </View>
+      {/* Below the header the panes own no window corner. Split panes declare their own. */}
+      <WindowChromeRegion corners={desktopBodyCorners}>
+        <View style={styles.centerContent}>
+          <View style={styles.content}>{desktopContent}</View>
+        </View>
+      </WindowChromeRegion>
     </DesktopCenterColumnChrome>
   );
 
@@ -3994,6 +4028,10 @@ const styles = StyleSheet.create((theme) => ({
   centerColumn: {
     flex: 1,
     minHeight: 0,
+  },
+  // The stack's top padding, above the header, paints the header's surface.
+  topChrome: {
+    backgroundColor: theme.colors.surface0,
   },
   headerTitleContainer: {
     flex: 1,

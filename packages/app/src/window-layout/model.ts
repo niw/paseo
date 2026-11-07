@@ -5,6 +5,13 @@ export interface WindowLayoutRect {
   height: number;
 }
 
+export interface WindowCornerRadii {
+  topLeft: number;
+  topRight: number;
+  bottomLeft: number;
+  bottomRight: number;
+}
+
 export interface WindowLayout {
   bounds: WindowLayoutRect;
   verticalBarEdge: "none" | "leading" | "trailing";
@@ -20,6 +27,8 @@ export interface WindowLayout {
   occlusions?: WindowLayoutRect[];
   /** The status bar's frame, or null where no status bar shows. */
   statusBar?: WindowLayoutRect | null;
+  /** The radius of each window corner, which can differ per corner. Null before iOS 26. */
+  cornerRadii?: WindowCornerRadii | null;
   divisions: WindowLayoutRect[];
 }
 

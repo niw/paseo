@@ -4,7 +4,7 @@ import { useHardwareKeyboardPresent } from "@/keyboard";
 import { useAddHost } from "@/hosts/add-host";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { PaddedSideInsetsView } from "@/components/padded-side-insets";
-import { HorizontalSafeAreaRegion, useTopChromeInsets } from "@/components/safe-area-edges";
+import { HorizontalSafeAreaRegion } from "@/components/safe-area-edges";
 import type { ComponentType, ReactNode } from "react";
 import { Alert, Pressable, ScrollView, View, type PressableStateCallbackType } from "react-native";
 import { useRouter } from "expo-router";
@@ -69,7 +69,11 @@ import {
   type HostProfile,
 } from "@/types/host-connection";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
-import { WindowChromeRegion, WindowChromeSafeArea } from "@/utils/desktop-window";
+import {
+  useTopChromeInsets,
+  WindowChromeRegion,
+  WindowChromeSafeArea,
+} from "@/utils/desktop-window";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { BackHeader } from "@/components/headers/back-header";
 import { PageLayout } from "@/components/page-layout";

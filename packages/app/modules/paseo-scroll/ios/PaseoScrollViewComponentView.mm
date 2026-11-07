@@ -7,6 +7,10 @@
 
 using namespace facebook::react;
 
+// React Native's scroll view is its UIScrollView's delegate but doesn't declare it in its header.
+@interface RCTScrollViewComponentView (PaseoScrollViewDelegate) <UIScrollViewDelegate>
+@end
+
 /**
  * React Native's scroll view with three maintainVisibleContentPosition corrections.
  *
@@ -29,6 +33,9 @@ using namespace facebook::react;
  * A drag owns the offset from the frame it begins, and JS removes the pin only a round trip later.
  * While the user drags, a mount anchored on the pin keeps the offset, so the line grows below the
  * rows under the finger. Android's PaseoScrollView does the same.
+ *
+ * Scroll to top where the app's controls sit under the status bar's tap region; see
+ * scrollViewShouldScrollToTop:.
  *
  * A shrink at the end. A mount that shrinks the content sets the smaller contentSize, and UIKit
  * clamps contentOffset to the new end. React Native then adds the anchor's movement to the clamped
@@ -147,6 +154,40 @@ using namespace facebook::react;
 {
   return [view isKindOfClass:[RCTViewComponentView class]] &&
       [((RCTViewComponentView *)view).nativeId isEqualToString:@"paseo-end-pin"];
+}
+
+// iOS scrolls to the top when the user taps the status bar region at the top of the window, even
+// when the tap lands on one of the app's own controls there. On an iPhone the top safe-area inset
+// covers that region, so nothing of the app's sits in it. On iPhone Duo folded the status bar is a
+// strip on the side and the top inset is 0, yet a tap in the top 64pt still scrolls to the top: a
+// sidebar's close button or any header button there threw the chat back to its start. Where the
+// app's content sits in the region the scroll view ignores the tap.
+- (BOOL)scrollViewShouldScrollToTop:(UIScrollView *)scrollView
+{
+  if (![self isStatusBarClearOfContent]) {
+    return NO;
+  }
+  return [super scrollViewShouldScrollToTop:scrollView];
+}
+
+// Whether the status bar runs across the window's top inside the top safe-area inset, as on an
+// iPhone with a notch or Dynamic Island. Otherwise the app's content shares the top of the window
+// with the status bar's tap region.
+- (BOOL)isStatusBarClearOfContent
+{
+  UIWindow *window = self.window;
+  UIStatusBarManager *statusBarManager = window.windowScene.statusBarManager;
+  if (!window || !statusBarManager || statusBarManager.isStatusBarHidden) {
+    return YES;
+  }
+  CGRect statusBar = [window convertRect:statusBarManager.statusBarFrame fromWindow:nil];
+  if (CGRectIsEmpty(statusBar)) {
+    return YES;
+  }
+  CGRect bounds = window.bounds;
+  BOOL spansTop = CGRectGetMinY(statusBar) <= CGRectGetMinY(bounds) + 0.5 &&
+      CGRectGetWidth(statusBar) >= CGRectGetWidth(bounds) - 0.5;
+  return spansTop && window.safeAreaInsets.top >= CGRectGetMaxY(statusBar) - 0.5;
 }
 
 - (UIView *)contentView
