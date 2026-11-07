@@ -14,6 +14,8 @@ interface ComposerDockProps {
   centered?: boolean;
   /** See the native dock: the same mounted composer fills the visible surface. */
   fullscreen?: boolean;
+  /** Native only: the content runs behind a floating composer. Web keeps the composer in flow. */
+  contentUnderComposer?: boolean;
 }
 
 export function ComposerDock({

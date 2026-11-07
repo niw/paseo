@@ -1,4 +1,6 @@
 import { ComposerDockBackground } from "./internal/background";
+import { StreamBottomOverlayProvider } from "@/agent-stream/bottom-overlay";
+import { EdgeFade } from "@/components/ui/edge-fade";
 export { ComposerDockBackground } from "./internal/background";
 export { ComposerFullscreenBody, ComposerFullscreenFooter } from "./internal/fullscreen";
 import { ScrollView } from "@/components/ui/scroll-view";
@@ -118,15 +120,33 @@ interface ComposerDockProps {
    * surface stops translating. The screen that owns the chrome hides it.
    */
   fullscreen?: boolean;
+  /**
+   * The content runs to the bottom edge behind the composer, which floats over it with a fade.
+   * The content reads the composer's height from `useStreamBottomOverlayInset`, so only content
+   * that does, like the agent stream, should set this.
+   */
+  contentUnderComposer?: boolean;
 }
+
+/** How far the fade above the composer reaches, so content dissolves instead of clipping. */
+const COMPOSER_FADE_OVERHANG = 32;
+/** Share of the fade, from the bottom edge, that stays opaque behind the composer's controls. */
+const COMPOSER_FADE_SOLID_FRACTION = 0.35;
 
 /** The stationary viewport, translated surface, and bounded composer are one owner. */
 export function ComposerDock({
   children: [content, composer, overlay],
   centered = false,
   fullscreen = false,
+  contentUnderComposer = false,
 }: ComposerDockProps) {
   const insets = useSafeAreaInsets();
+  const floatsOverContent = contentUnderComposer && !fullscreen && !centered;
+  const [composerHeight, setComposerHeight] = useState(0);
+  const measureComposer = useCallback((event: LayoutChangeEvent) => {
+    setComposerHeight(Math.round(event.nativeEvent.layout.height));
+  }, []);
+  const bottomOverlayInset = floatsOverContent ? composerHeight : 0;
   const contentMaxWidth = resolveContentMaxWidth(useAppSettings().settings);
   const centeredClearance = useCenteredClearance(insets.bottom);
   // Preserve the existing centered form's visual balance on tablets.
@@ -205,12 +225,23 @@ export function ComposerDock({
           <ComposerDockBackground style={StyleSheet.absoluteFill} />
           {/* Content runs under the side insets; controls in it keep themselves inside. */}
           <View style={dockStyles.content} pointerEvents="box-none">
-            {content}
+            <StreamBottomOverlayProvider value={bottomOverlayInset}>
+              {content}
+            </StreamBottomOverlayProvider>
           </View>
         </View>
+        {floatsOverContent && composerHeight > 0 ? (
+          <EdgeFade
+            edge="bottom"
+            solidFraction={COMPOSER_FADE_SOLID_FRACTION}
+            backdrop="surface0"
+            style={[dockStyles.composerFade, { height: composerHeight + COMPOSER_FADE_OVERHANG }]}
+          />
+        ) : null}
         <ComposerViewportContent
-          style={fullscreen ? dockStyles.fullscreenSlot : dockStyles.composer}
+          style={resolveComposerSlotStyle(fullscreen, floatsOverContent)}
           fullscreen={fullscreen}
+          onLayout={floatsOverContent ? measureComposer : undefined}
         >
           <View
             style={
@@ -235,6 +266,11 @@ export function ComposerDock({
   );
 }
 
+function resolveComposerSlotStyle(fullscreen: boolean, floatsOverContent: boolean) {
+  if (fullscreen) return dockStyles.fullscreenSlot;
+  return floatsOverContent ? dockStyles.floatingComposer : dockStyles.composer;
+}
+
 // Plain React Native styles: these land on Reanimated views, which must not carry
 // theme-driven Unistyles (docs/unistyles.md). The content width arrives inline.
 const dockStyles = StyleSheet.create({
@@ -243,6 +279,8 @@ const dockStyles = StyleSheet.create({
   content: { flex: 1, justifyContent: "flex-end" },
   composer: { width: "100%", flexShrink: 1 },
   fullscreenSlot: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+  floatingComposer: { position: "absolute", left: 0, right: 0, bottom: 0 },
+  composerFade: { position: "absolute", left: 0, right: 0, bottom: 0 },
   centeredViewport: { flex: 1, alignItems: "center", justifyContent: "center" },
   centered: { flexShrink: 1, width: "100%" },
   // Reserve the composer's own capped height before the setup scroll view shrinks.
