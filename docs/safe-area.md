@@ -97,6 +97,12 @@ The explorer panel pads its own top, so only its tab row sits beside the corner:
   `paddingLeft` and `paddingRight` props and overwrites horizontal padding in its `style`.
 - The composer dock's content runs under the side insets; the controls in it inset themselves, like
   the compact New workspace pickers and the draft tab's setup fields.
+- The chat's messages run under the side insets while its rows fill the width: the agent's text
+  and the user message bubble alike. Once the rows reach `contentMaxWidth` they center where the
+  composer centers, between the insets, as far as the free space allows (`resolveStreamColumn` in
+  `packages/app/src/agent-stream/column.ts`). Controls stay inside the insets: the user message's
+  buttons, and every row other than a message, like a tool call, a permission prompt or the turn
+  footer (`useStreamColumnInsets()`, `useStreamControlsRowPadding()`).
 - Pad a scroll view of controls through its content container, or give it margins when its style
   already sets horizontal padding. `paddingLeft` replaces `paddingHorizontal`; it doesn't add to it.
 - A tree row adds `useTreeRowInsets()` to its padding, so the list and the row highlights reach the

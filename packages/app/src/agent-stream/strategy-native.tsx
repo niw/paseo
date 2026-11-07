@@ -18,6 +18,14 @@ import {
   type ViewStyle,
 } from "react-native";
 import { withUnistyles } from "react-native-unistyles";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useStreamBottomOverlayInset } from "./bottom-overlay";
+import {
+  resolveStreamColumn,
+  STREAM_LIST_HORIZONTAL_PADDING,
+  StreamColumnInsetsContext,
+} from "./column";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { StreamItem } from "@/types/stream";
 import type { Theme } from "@/styles/theme";
@@ -284,33 +292,56 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       ? undefined
       : DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION;
   const topOverlayInset = useStreamTopOverlayInset();
-  // The list is inverted, so its content's bottom padding is the visual top.
+  const bottomOverlayInset = useStreamBottomOverlayInset();
+  // The list scrolls edge to edge, under the side insets; see `resolveStreamColumn`.
+  const { left: insetLeft, right: insetRight } = useSafeAreaInsets();
+  const isCompact = useIsCompactFormFactor();
+  const [listWidth, setListWidth] = useState(0);
+  const column = useMemo(
+    () =>
+      resolveStreamColumn({
+        width: listWidth,
+        insetLeft,
+        insetRight,
+        maxWidth: props.contentMaxWidth,
+        listPadding: isCompact
+          ? STREAM_LIST_HORIZONTAL_PADDING.compact
+          : STREAM_LIST_HORIZONTAL_PADDING.regular,
+      }),
+    [insetLeft, insetRight, isCompact, listWidth, props.contentMaxWidth],
+  );
+  // The list is inverted, so its content's bottom padding is the visual top and its top padding
+  // is the visual bottom, where the composer floats over the stream.
   const listContentContainerStyle = useMemo(
     () => [
       baseListContentContainerStyle,
       {
+        marginLeft: column.marginLeft,
+        marginRight: column.marginRight,
+        paddingTop: bottomOverlayInset,
         paddingBottom: streamKeyboardInset.contentContainerPaddingBottom + topOverlayInset,
       },
     ],
     [
       baseListContentContainerStyle,
+      bottomOverlayInset,
+      column.marginLeft,
+      column.marginRight,
       streamKeyboardInset.contentContainerPaddingBottom,
       topOverlayInset,
     ],
   );
-  const listInsetProps = useMemo(
-    () =>
-      streamKeyboardInset.contentInset
-        ? {
-            automaticallyAdjustContentInsets: false,
-            automaticallyAdjustsScrollIndicatorInsets: false,
-            contentInsetAdjustmentBehavior: "never" as const,
-            contentInset: streamKeyboardInset.contentInset,
-            scrollIndicatorInsets: streamKeyboardInset.contentInset,
-          }
-        : {},
-    [streamKeyboardInset.contentInset],
-  );
+  const listInsetProps = useMemo(() => {
+    const contentInset = streamKeyboardInset.contentInset;
+    if (!contentInset && bottomOverlayInset === 0) return {};
+    return {
+      automaticallyAdjustContentInsets: false,
+      automaticallyAdjustsScrollIndicatorInsets: false,
+      contentInsetAdjustmentBehavior: "never" as const,
+      ...(contentInset ? { contentInset } : {}),
+      scrollIndicatorInsets: { ...contentInset, top: bottomOverlayInset },
+    };
+  }, [bottomOverlayInset, streamKeyboardInset.contentInset]);
 
   useEffect(() => {
     streamViewportMetricsRef.current = {
@@ -470,6 +501,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     const previousViewportHeight = streamViewportMetricsRef.current.viewportHeight;
     const viewportWidth = Math.max(0, event.nativeEvent.layout.width);
     const viewportHeight = Math.max(0, event.nativeEvent.layout.height);
+    setListWidth(viewportWidth);
     const viewportChanged =
       (previousViewportWidth > 0 && previousViewportWidth !== viewportWidth) ||
       (previousViewportHeight > 0 && previousViewportHeight !== viewportHeight);
@@ -578,38 +610,40 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   // RN's FlatList strictMode keeps its internal renderItem wrapper stable when
   // data or the live header changes, preserving the row identities above.
   return (
-    <FlatList
-      {...listInsetProps}
-      ref={flatListRef}
-      data={historyRows}
-      renderItem={renderItem}
-      keyExtractor={keyExtractor}
-      strictMode
-      testID="agent-chat-scroll"
-      nativeID="agent-chat-scroll-native-virtualized"
-      ListHeaderComponent={liveHeaderContent ?? undefined}
-      ListFooterComponent={historyFooterContent ?? undefined}
-      contentContainerStyle={listContentContainerStyle}
-      style={listStyle}
-      onLayout={handleListLayout}
-      onScroll={handleScroll}
-      onScrollBeginDrag={handleScrollBeginDrag}
-      onScrollEndDrag={handleScrollEndDrag}
-      onMomentumScrollBegin={handleMomentumScrollBegin}
-      onMomentumScrollEnd={handleMomentumScrollEnd}
-      scrollEventThrottle={16}
-      onContentSizeChange={handleContentSizeChange}
-      maintainVisibleContentPosition={maintainVisibleContentPosition}
-      // Tall Markdown rows exhaust a shallow window during flings. Keep the initial
-      // render small, then refill a deeper window in batches large enough to keep up.
-      initialNumToRender={2}
-      maxToRenderPerBatch={10}
-      windowSize={NATIVE_STREAM_WINDOW_SIZE}
-      removeClippedSubviews={false}
-      scrollEnabled={scrollEnabled}
-      showsVerticalScrollIndicator
-      inverted
-    />
+    <StreamColumnInsetsContext.Provider value={column.insets}>
+      <FlatList
+        {...listInsetProps}
+        ref={flatListRef}
+        data={historyRows}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        strictMode
+        testID="agent-chat-scroll"
+        nativeID="agent-chat-scroll-native-virtualized"
+        ListHeaderComponent={liveHeaderContent ?? undefined}
+        ListFooterComponent={historyFooterContent ?? undefined}
+        contentContainerStyle={listContentContainerStyle}
+        style={listStyle}
+        onLayout={handleListLayout}
+        onScroll={handleScroll}
+        onScrollBeginDrag={handleScrollBeginDrag}
+        onScrollEndDrag={handleScrollEndDrag}
+        onMomentumScrollBegin={handleMomentumScrollBegin}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        scrollEventThrottle={16}
+        onContentSizeChange={handleContentSizeChange}
+        maintainVisibleContentPosition={maintainVisibleContentPosition}
+        // Tall Markdown rows exhaust a shallow window during flings. Keep the initial
+        // render small, then refill a deeper window in batches large enough to keep up.
+        initialNumToRender={2}
+        maxToRenderPerBatch={10}
+        windowSize={NATIVE_STREAM_WINDOW_SIZE}
+        removeClippedSubviews={false}
+        scrollEnabled={scrollEnabled}
+        showsVerticalScrollIndicator
+        inverted
+      />
+    </StreamColumnInsetsContext.Provider>
   );
 }
 

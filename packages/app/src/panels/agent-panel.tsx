@@ -21,6 +21,7 @@ import invariant from "tiny-invariant";
 import { shallow, useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useAgentStreamTail } from "@/agent-stream/use-agent-stream-tail";
+import { useStreamBottomOverlayInset } from "@/agent-stream/bottom-overlay";
 import { AgentStreamView, type AgentStreamViewHandle } from "@/agent-stream/view";
 import { ArchivedAgentCallout } from "@/components/archived-agent-callout";
 import { ComposerDock } from "@/composer/dock";
@@ -1337,7 +1338,9 @@ function ChatSurface({
 }) {
   return (
     <FileDropZone style={styles.container} disabled={disabled}>
-      <ComposerDock fullscreen={fullscreen}>{children}</ComposerDock>
+      <ComposerDock fullscreen={fullscreen} contentUnderComposer>
+        {children}
+      </ComposerDock>
     </FileDropZone>
   );
 }
@@ -1350,8 +1353,14 @@ function TimelineSyncErrorCallout({
   onRetry: () => void;
 }) {
   const { t } = useTranslation();
+  // The stream runs behind a floating composer; the callout rests on the composer's top edge.
+  const composerOverlayInset = useStreamBottomOverlayInset();
+  const railStyle = useMemo(
+    () => [styles.timelineSyncCalloutRail, { marginBottom: composerOverlayInset }],
+    [composerOverlayInset],
+  );
   return (
-    <View style={styles.timelineSyncCalloutRail}>
+    <View style={railStyle}>
       <View style={styles.timelineSyncCalloutContent}>
         <View style={styles.timelineSyncCallout} testID="agent-timeline-sync-error">
           <Text style={styles.timelineSyncCalloutText}>
