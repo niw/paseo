@@ -1,4 +1,5 @@
 import { ComposerDockBackground } from "@/composer/dock";
+import { useTopChromeInsets } from "@/components/safe-area-edges";
 import { useMemo, type ReactNode } from "react";
 import type { LayoutChangeEvent } from "react-native";
 import { View, type StyleProp, type ViewStyle } from "react-native";
@@ -41,9 +42,12 @@ export function ScreenHeader({
   const topPadding = isMobile ? HEADER_TOP_PADDING_MOBILE : 0;
   const baseHorizontalPadding = isMobile ? theme.spacing[2] : theme.spacing[3];
 
+  // Beside an occluded corner the row shares the top inset instead of sitting below it.
+  const rowHeight = isMobile ? HEADER_INNER_HEIGHT_MOBILE : HEADER_INNER_HEIGHT;
+  const topChrome = useTopChromeInsets(rowHeight + topPadding);
   const innerStyle = useMemo(
-    () => [styles.inner, { paddingTop: insets.top + topPadding }],
-    [insets.top, topPadding],
+    () => [styles.inner, { paddingTop: topChrome.paddingTop + topPadding }],
+    [topChrome.paddingTop, topPadding],
   );
   const rowStyle = useMemo(() => [styles.row, borderless && styles.borderless], [borderless]);
   const leftCombinedStyle = useMemo(() => [styles.left, leftStyle], [leftStyle]);
@@ -55,6 +59,9 @@ export function ScreenHeader({
         <WindowChromeSafeArea
           placement="inline"
           horizontalPadding={baseHorizontalPadding}
+          // The row and its border run under the horizontal insets; its controls stay inside.
+          paddingLeftExtra={insets.left + topChrome.paddingLeft}
+          paddingRightExtra={insets.right + topChrome.paddingRight}
           onLayout={onRowLayout}
           style={rowStyle}
         >

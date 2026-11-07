@@ -4,6 +4,7 @@ import {
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
 import React from "react";
+import { PaddedSideInsetsProvider } from "@/components/padded-side-insets";
 import {
   forwardRef,
   useCallback,
@@ -26,6 +27,9 @@ import {
   type SheetContentDragGesture,
 } from "@/components/ui/bottom-sheet-scope";
 import { SheetBackdrop } from "./sheet-backdrop";
+import { StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { HorizontalSafeAreaRegion } from "@/components/safe-area-edges";
 
 type GorhomBottomSheetModalMethods = ElementRef<typeof GorhomBottomSheetModal>;
 
@@ -151,13 +155,41 @@ export const IsolatedBottomSheetModal = forwardRef<
       simultaneousHandlers={contentDragHandlers.simultaneousHandlers}
     >
       <BottomSheetScope attachContentDrag={attachContentDrag}>
-        {contextBridge ? contextBridge(children) : children}
+        <SheetHorizontalSafeArea>
+          {contextBridge ? contextBridge(children) : children}
+        </SheetHorizontalSafeArea>
       </BottomSheetScope>
     </GorhomBottomSheetModal>
   );
 
   return modal;
 });
+
+/**
+ * The sheet spans the window and its background runs under the side insets; its content stays
+ * inside them. It renders at the sheet host, so the insets read here are the window's. Content
+ * below sees no side insets left, and still owns the bottom one. A surface that should reach the
+ * sheet's edges is a `SheetFullBleedView`.
+ */
+function SheetHorizontalSafeArea({ children }: { children: ReactNode }) {
+  const { left, right } = useSafeAreaInsets();
+  const sideInsets = useMemo(() => ({ left, right }), [left, right]);
+  const style = useMemo(
+    () => [sheetStyles.body, { paddingLeft: left, paddingRight: right }],
+    [left, right],
+  );
+  return (
+    <PaddedSideInsetsProvider value={sideInsets}>
+      <HorizontalSafeAreaRegion edges={SHEET_CONTENT_SAFE_AREA_EDGES} style={style}>
+        {children}
+      </HorizontalSafeAreaRegion>
+    </PaddedSideInsetsProvider>
+  );
+}
+
+const SHEET_CONTENT_SAFE_AREA_EDGES = { left: false, right: false } as const;
+// Grows into a fixed-detent sheet and still sizes to content in a dynamically sized one.
+const sheetStyles = StyleSheet.create({ body: { flexGrow: 1, flexShrink: 1, minHeight: 0 } });
 
 export function useIsolatedBottomSheetVisibility({
   visible,
@@ -213,5 +245,6 @@ export function useIsolatedBottomSheetVisibility({
 }
 
 export { SheetVisibleFrame } from "./visible-frame";
+export { SheetFullBleedRegion, SheetFullBleedView, SheetScrollView } from "./full-bleed-view";
 export { systemBackPress } from "./back-press";
 export { SheetHostScope } from "./host-scope";

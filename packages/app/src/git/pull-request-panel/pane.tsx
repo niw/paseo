@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { RegionPaddedView } from "@/components/padded-side-insets";
 import { Image, Pressable, Text, View, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
@@ -42,7 +43,7 @@ import {
   paneContentToolbarIconSize,
   paneContentToolbarIconButtonStyle,
 } from "@/components/ui/pane-content-toolbar";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
 import { getForgePresentation } from "@/git/forge";
 import { CLIENT_FORGE_VIEW_MODULES } from "@/git/forges/view";
 import type { PaneNativeContribution } from "@/git/client-forge-module";
@@ -478,10 +479,47 @@ export function PullRequestPane({
       })
     : null;
 
+  const header = (
+    <Pressable onPress={handleOpenPrUrl} style={styles.header}>
+      {({ hovered }) => (
+        <>
+          <Text style={styles.title} testID="pr-pane-title">
+            {data.title}
+            <Text style={styles.titleNumber}>
+              {" "}
+              {forgePresentation.numberPrefix}
+              {data.number}
+            </Text>
+          </Text>
+          <View style={styles.metaLine}>
+            <StateIcon size={14} uniProps={statePresentation.iconColor} />
+            <Text style={stateLabelStyle(data.state)} testID="pr-pane-state">
+              {t(getStateLabelKey(data.state))}
+            </Text>
+            {nativeHeaderMeta}
+            {repoIdentity ? (
+              <Text style={styles.repoRef} numberOfLines={1}>
+                {repoIdentity}
+              </Text>
+            ) : null}
+            <View style={hovered ? styles.headerLinkIcon : styles.headerLinkIconHidden}>
+              <ThemedExternalLink size={12} uniProps={foregroundMutedColorMapping} />
+            </View>
+          </View>
+        </>
+      )}
+    </Pressable>
+  );
+
   return (
     <PullRequestPaneSplit activityOpen={activityOpen}>
       <>
-        <PaneContentToolbar style={styles.toolbar} testID="pr-pane-toolbar">
+        <PaneContentToolbar
+          style={styles.toolbar}
+          paddingLeft={SPACING[3]}
+          paddingRight={SPACING[3]}
+          testID="pr-pane-toolbar"
+        >
           <View style={styles.toolbarActions}>
             <Button
               variant="ghost"
@@ -527,64 +565,41 @@ export function PullRequestPane({
           ) : null}
         </PaneContentToolbar>
 
-        <Pressable onPress={handleOpenPrUrl} style={styles.header}>
-          {({ hovered }) => (
-            <>
-              <Text style={styles.title} testID="pr-pane-title">
-                {data.title}
-                <Text style={styles.titleNumber}>
-                  {" "}
-                  {forgePresentation.numberPrefix}
-                  {data.number}
-                </Text>
-              </Text>
-              <View style={styles.metaLine}>
-                <StateIcon size={14} uniProps={statePresentation.iconColor} />
-                <Text style={stateLabelStyle(data.state)} testID="pr-pane-state">
-                  {t(getStateLabelKey(data.state))}
-                </Text>
-                {nativeHeaderMeta}
-                {repoIdentity ? (
-                  <Text style={styles.repoRef} numberOfLines={1}>
-                    {repoIdentity}
-                  </Text>
-                ) : null}
-                <View style={hovered ? styles.headerLinkIcon : styles.headerLinkIconHidden}>
-                  <ThemedExternalLink size={12} uniProps={foregroundMutedColorMapping} />
-                </View>
-              </View>
-            </>
-          )}
-        </Pressable>
+        {/* The toolbar and the split's separators run under the side insets; the rest stays inside them. */}
+        <RegionPaddedView>
+          {header}
 
-        {nativeChecksSection ?? (
-          <ChecksSection
-            checks={data.checks}
-            open={checksOpen}
-            onToggle={handleToggleChecks}
-            attachEnabled={attachEnabled}
-            loadingCheckKeys={loadingCheckKeys}
-            onAddLogsToChat={handleAddCheckLogsToChat}
-          />
-        )}
-      </>
-      <SectionHeader
-        title={t("workspace.git.pr.sections.activity")}
-        open={activityOpen}
-        onToggle={handleToggleActivity}
-        summary={
-          <>
-            <SummaryPill count={approvals} icon={SUMMARY_APPROVAL_ICON} variant="success" />
-            <SummaryPill
-              count={changesRequested}
-              icon={SUMMARY_CHANGES_REQUESTED_ICON}
-              variant="danger"
+          {nativeChecksSection ?? (
+            <ChecksSection
+              checks={data.checks}
+              open={checksOpen}
+              onToggle={handleToggleChecks}
+              attachEnabled={attachEnabled}
+              loadingCheckKeys={loadingCheckKeys}
+              onAddLogsToChat={handleAddCheckLogsToChat}
             />
-            <SummaryPill count={commentCount} icon={SUMMARY_COMMENT_ICON} variant="muted" />
-          </>
-        }
-      />
-      <View style={sectionKitStyles.sectionBody}>
+          )}
+        </RegionPaddedView>
+      </>
+      <RegionPaddedView>
+        <SectionHeader
+          title={t("workspace.git.pr.sections.activity")}
+          open={activityOpen}
+          onToggle={handleToggleActivity}
+          summary={
+            <>
+              <SummaryPill count={approvals} icon={SUMMARY_APPROVAL_ICON} variant="success" />
+              <SummaryPill
+                count={changesRequested}
+                icon={SUMMARY_CHANGES_REQUESTED_ICON}
+                variant="danger"
+              />
+              <SummaryPill count={commentCount} icon={SUMMARY_COMMENT_ICON} variant="muted" />
+            </>
+          }
+        />
+      </RegionPaddedView>
+      <RegionPaddedView style={sectionKitStyles.sectionBody}>
         {timelineEntries.length > 0 && attachEnabled && visibleEntries.length > 0 ? (
           <View style={styles.activityToolbar}>
             <Button
@@ -617,7 +632,7 @@ export function PullRequestPane({
               />
             ))
           : null}
-      </View>
+      </RegionPaddedView>
     </PullRequestPaneSplit>
   );
 }
@@ -1257,8 +1272,6 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingRight: theme.spacing[3],
-    paddingLeft: theme.spacing[3],
   },
   toolbarActions: {
     flexDirection: "row",

@@ -1,9 +1,10 @@
 import { useRetainedPullRequestData } from "./pull-request/data";
+import { RegionPaddedView } from "@/components/padded-side-insets";
 import {
   pullRequestPanelPresentation,
   usePullRequestPanelDescriptor,
 } from "./pull-request/descriptor";
-import { Text, View } from "react-native";
+import { Text } from "react-native";
 import { useTranslation } from "react-i18next";
 import invariant from "tiny-invariant";
 import { usePaneContext } from "@/panels/pane-context";
@@ -26,9 +27,9 @@ function PullRequestPanel() {
   const prPane = useRetainedPullRequestData({ serverId, cwd }, "content");
   if (!cwd) {
     return (
-      <View style={CENTERED_PADDED_STYLE}>
+      <RegionPaddedView style={CENTERED_PADDED_STYLE}>
         <Text>{t("panels.file.directoryMissing")}</Text>
-      </View>
+      </RegionPaddedView>
     );
   }
   return (

@@ -157,7 +157,14 @@ export function ComposerDock({
         style={
           fullscreen
             ? dockStyles.viewport
-            : [dockStyles.centeredViewport, { paddingBottom: bottomInset }]
+            : [
+                dockStyles.centeredViewport,
+                {
+                  paddingBottom: bottomInset,
+                  paddingLeft: insets.left,
+                  paddingRight: insets.right,
+                },
+              ]
         }
         bottomInset={bottomInset}
         centered
@@ -211,6 +218,7 @@ export function ComposerDock({
           {/* A responder ancestor intercepts native scroll drags on Android Fabric.
               Only unclaimed background touches may reach this sibling. */}
           <ComposerDockBackground style={StyleSheet.absoluteFill} />
+          {/* Content runs under the side insets; controls in it keep themselves inside. */}
           <View style={dockStyles.content} pointerEvents="box-none">
             {content}
           </View>
@@ -223,7 +231,14 @@ export function ComposerDock({
             style={
               fullscreen
                 ? fullscreenSurface
-                : [dockStyles.composer, { paddingBottom: placement.restingPadding }]
+                : [
+                    dockStyles.composer,
+                    {
+                      paddingBottom: placement.restingPadding,
+                      paddingLeft: insets.left,
+                      paddingRight: insets.right,
+                    },
+                  ]
             }
           >
             {composer}
