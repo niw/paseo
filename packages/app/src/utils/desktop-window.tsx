@@ -296,11 +296,16 @@ export function useHasOwnedWindowChromeObstruction(corner: WindowChromeCorner): 
 type WindowChromeSafeAreaProps = ViewProps & {
   placement: WindowChromeSafeAreaPlacement;
   horizontalPadding?: number;
+  /** Extra inline padding per side, such as the horizontal safe-area insets. */
+  paddingLeftExtra?: number;
+  paddingRightExtra?: number;
 };
 
 export function WindowChromeSafeArea({
   placement,
   horizontalPadding = 0,
+  paddingLeftExtra = 0,
+  paddingRightExtra = 0,
   style,
   ...props
 }: WindowChromeSafeAreaProps) {
@@ -312,10 +317,10 @@ export function WindowChromeSafeArea({
     const paddingLeft = "paddingLeft" in resolved ? resolved.paddingLeft : 0;
     const paddingRight = "paddingRight" in resolved ? resolved.paddingRight : 0;
     return {
-      paddingLeft: paddingLeft + horizontalPadding,
-      paddingRight: paddingRight + horizontalPadding,
+      paddingLeft: paddingLeft + horizontalPadding + paddingLeftExtra,
+      paddingRight: paddingRight + horizontalPadding + paddingRightExtra,
     };
-  }, [corners, horizontalPadding, obstruction, placement]);
+  }, [corners, horizontalPadding, obstruction, paddingLeftExtra, paddingRightExtra, placement]);
   const combinedStyle = useMemo(() => [style, safeAreaStyle], [safeAreaStyle, style]);
   return <View {...props} style={combinedStyle} />;
 }

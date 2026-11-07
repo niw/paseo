@@ -1,6 +1,8 @@
 import { ComposerEditingScope } from "@/composer/editing-session";
-import React, { useMemo, type ComponentType } from "react";
+import React, { useMemo, type ComponentType, type ReactNode } from "react";
+import { StyleSheet } from "react-native";
 import invariant from "tiny-invariant";
+import { RegionPaddedView } from "@/components/padded-side-insets";
 import {
   createPaneFocusContextValue,
   PaneFocusProvider,
@@ -18,6 +20,8 @@ import type { PaneHost } from "@/panels/panel-manifest";
 export interface WorkspacePaneContentModel {
   key: string;
   Component: ComponentType;
+  /** See `PanelManifest.ownsSideInsets`. */
+  ownsSideInsets: boolean;
   paneContextValue: PaneContextValue;
 }
 
@@ -60,6 +64,7 @@ export function buildWorkspacePaneContentModel({
   return {
     key: `${normalizedServerId}:${normalizedWorkspaceId}:${tab.tabId}`,
     Component: registration.component,
+    ownsSideInsets: registration.ownsSideInsets,
     paneContextValue: {
       serverId: normalizedServerId,
       workspaceId: normalizedWorkspaceId,
@@ -159,10 +164,26 @@ export function WorkspacePaneContent({
             tabId={paneContextValue.tabId}
             targetKey={JSON.stringify(paneContextValue.target)}
           >
-            <Component key={key} />
+            {content.ownsSideInsets ? (
+              <Component key={key} />
+            ) : (
+              <HostPaddedPanel>
+                <Component key={key} />
+              </HostPaddedPanel>
+            )}
           </ComposerEditingScope>
         </PaneFocusProvider>
       </PaneProvider>
     </RenderProfile>
   );
 }
+
+/**
+ * Pads a panel that does not handle the side safe-area insets itself, so its controls stay clear
+ * of them wherever the pane sits: the column, the explorer or a sheet. The panel sees no insets.
+ */
+function HostPaddedPanel({ children }: { children: ReactNode }) {
+  return <RegionPaddedView style={styles.hostPaddedPanel}>{children}</RegionPaddedView>;
+}
+
+const styles = StyleSheet.create({ hostPaddedPanel: { flex: 1, minWidth: 0, minHeight: 0 } });

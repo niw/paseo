@@ -1,4 +1,5 @@
-import { Text, View } from "react-native";
+import { Text } from "react-native";
+import { RegionPaddedView } from "@/components/padded-side-insets";
 import { StyleSheet } from "react-native-unistyles";
 import { RotateCw } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -13,12 +14,12 @@ export function PullRequestPaneError({
 }) {
   const { t } = useTranslation();
   return (
-    <View style={styles.root} testID="pr-pane-error">
+    <RegionPaddedView style={styles.root} testID="pr-pane-error">
       <Text style={styles.message}>{message ?? t("workspace.git.diff.failedRefresh")}</Text>
       <Button variant="ghost" size="sm" leftIcon={RotateCw} onPress={onRetry}>
         {t("common.actions.retry")}
       </Button>
-    </View>
+    </RegionPaddedView>
   );
 }
 

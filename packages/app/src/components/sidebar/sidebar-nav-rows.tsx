@@ -1,4 +1,5 @@
 import { router, usePathname } from "expo-router";
+import { useFullBleedStyle } from "@/components/padded-side-insets";
 import { CalendarClock, History, Plus, Search } from "lucide-react-native";
 import { memo, useCallback, useMemo, useRef, type ComponentType, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -44,6 +45,8 @@ export function SidebarNavRows({ style, onBeforeNavigate, firstRowTrailing }: Si
   const { items } = useSidebarNavItems("header");
   const visibleItems = useMemo(() => items.filter((item) => item.visible), [items]);
   const groupRef = useRef<View | null>(null);
+  // The group's bottom rule reaches the sidebar's edges past a side inset; its rows stay inside.
+  const fullBleedStyle = useFullBleedStyle();
 
   if (visibleItems.length === 0 && !firstRowTrailing) return null;
 
@@ -64,7 +67,7 @@ export function SidebarNavRows({ style, onBeforeNavigate, firstRowTrailing }: Si
   });
 
   return (
-    <View ref={groupRef} collapsable={false} style={style}>
+    <View ref={groupRef} collapsable={false} style={[style, fullBleedStyle]}>
       {firstRowTrailing ? (
         <View style={styles.firstRow}>
           <View style={styles.firstRowItem}>{firstRow}</View>

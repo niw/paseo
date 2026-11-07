@@ -1,4 +1,6 @@
 import { useCallback, useMemo, type ReactNode } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ConsumeSideInsets } from "@/components/safe-area-edges";
 import { View } from "react-native";
 import { useWorkspaceTabDrag } from "@/components/workspace-tab-drag-context";
 import { StyleSheet } from "react-native-unistyles";
@@ -117,46 +119,56 @@ export function ExplorerSidebarDock({
     [onCloseOtherTabs, tabs],
   );
 
+  // The rail and its divider reach the panel's edges under a side inset; the tabs and the header
+  // action stay inside it. The rail pads the insets once, so the tabs row inside sees none.
+  const insets = useSafeAreaInsets();
   return (
     <RetainedPanel active>
       <WindowChromeRegion corners="top-right">
         <View style={styles.dock} testID="workspace-explorer-sidebar">
-          <WindowChromeSafeArea placement="inline" style={styles.tabRail}>
+          <WindowChromeSafeArea
+            placement="inline"
+            style={styles.tabRail}
+            paddingLeftExtra={insets.left}
+            paddingRightExtra={insets.right}
+          >
             <TitlebarDragRegion />
-            <View style={styles.tabRow}>
-              <WorkspaceDesktopTabsRow
-                host="explorer"
-                launchPurpose="supporting"
-                isFocused={isWorkspaceFocused}
-                ownsKeyboardShortcuts={false}
-                setHoveredCloseTabKey={setHoveredCloseTabKey}
-                onCopyResumeCommand={onCopyResumeCommand}
-                onCopyAgentId={onCopyAgentId}
-                onCopyTerminalId={onCopyTerminalId}
-                onCopyFilePath={onCopyFilePath}
-                onReloadAgent={onReloadAgent}
-                onRenameTab={onRenameTab}
-                onCloseTabsToLeft={handleCloseTabsToLeft}
-                onCloseTabsToRight={handleCloseTabsToRight}
-                onCloseOtherTabs={handleCloseOtherTabs}
-                focusModeEnabled={false}
-                onExitFocusMode={onExitFocusMode}
-                externalDndContext={externalDndContext}
-                paneId={pane.id}
-                tabs={tabItems}
-                normalizedServerId={normalizedServerId}
-                normalizedWorkspaceId={normalizedWorkspaceId}
-                activeDragTabId={activeDragTabId}
-                tabDropPreviewIndex={
-                  tabDropPreview?.paneId === pane.id ? tabDropPreview.indicatorIndex : null
-                }
-                onNavigateTab={handleSelectTab}
-                onCloseTab={onCloseTab}
-                onCreateNewTab={onCreateNewTab}
-                onReorderTabs={handleReorderTabs}
-              />
-            </View>
-            {headerAction ? <View style={styles.headerAction}>{headerAction}</View> : null}
+            <ConsumeSideInsets>
+              <View style={styles.tabRow}>
+                <WorkspaceDesktopTabsRow
+                  host="explorer"
+                  launchPurpose="supporting"
+                  isFocused={isWorkspaceFocused}
+                  ownsKeyboardShortcuts={false}
+                  setHoveredCloseTabKey={setHoveredCloseTabKey}
+                  onCopyResumeCommand={onCopyResumeCommand}
+                  onCopyAgentId={onCopyAgentId}
+                  onCopyTerminalId={onCopyTerminalId}
+                  onCopyFilePath={onCopyFilePath}
+                  onReloadAgent={onReloadAgent}
+                  onRenameTab={onRenameTab}
+                  onCloseTabsToLeft={handleCloseTabsToLeft}
+                  onCloseTabsToRight={handleCloseTabsToRight}
+                  onCloseOtherTabs={handleCloseOtherTabs}
+                  focusModeEnabled={false}
+                  onExitFocusMode={onExitFocusMode}
+                  externalDndContext={externalDndContext}
+                  paneId={pane.id}
+                  tabs={tabItems}
+                  normalizedServerId={normalizedServerId}
+                  normalizedWorkspaceId={normalizedWorkspaceId}
+                  activeDragTabId={activeDragTabId}
+                  tabDropPreviewIndex={
+                    tabDropPreview?.paneId === pane.id ? tabDropPreview.indicatorIndex : null
+                  }
+                  onNavigateTab={handleSelectTab}
+                  onCloseTab={onCloseTab}
+                  onCreateNewTab={onCreateNewTab}
+                  onReorderTabs={handleReorderTabs}
+                />
+              </View>
+              {headerAction ? <View style={styles.headerAction}>{headerAction}</View> : null}
+            </ConsumeSideInsets>
             <View pointerEvents="none" style={styles.tabRailDivider} />
           </WindowChromeSafeArea>
           <View style={styles.content}>

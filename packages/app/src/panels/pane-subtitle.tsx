@@ -1,5 +1,8 @@
+import { useMemo } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { useHorizontalSafeAreaPadding } from "@/components/safe-area-edges";
+import { SPACING } from "@/styles/theme";
 
 /**
  * One muted line of facts about a pane's agent, under the pane's header and above its stream:
@@ -7,8 +10,11 @@ import { StyleSheet } from "react-native-unistyles";
  * its composer gets it from the same facts the composer's controls show.
  */
 export function PaneSubtitle({ text, testID }: { text: string; testID?: string }) {
+  // The line's border runs under the side insets; its text stays inside them.
+  const safeAreaPadding = useHorizontalSafeAreaPadding(SPACING[3]);
+  const headerStyle = useMemo(() => [styles.header, safeAreaPadding], [safeAreaPadding]);
   return (
-    <View style={styles.header}>
+    <View style={headerStyle}>
       <Text style={styles.text} numberOfLines={1} testID={testID}>
         {text}
       </Text>

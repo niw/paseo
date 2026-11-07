@@ -41,6 +41,8 @@ import { MaterialFileIcon } from "@/components/material-file-icon";
 import {
   TreeChevron,
   treeRowPaddingLeft,
+  useTreeRowInsets,
+  WORKSPACE_PANE_TRAILING_GLYPH_RAIL,
   workspaceTreeRowStyles,
   WORKSPACE_TREE_ICON_LABEL_GAP,
   WORKSPACE_TREE_ICON_SIZE,
@@ -164,6 +166,14 @@ type ExplorerPendingEdit =
   | { type: "create"; parentPath: string; kind: "file" | "directory" }
   | { type: "rename"; entry: ExplorerEntry };
 
+/** A row's padding inside its region's side insets; see `useTreeRowInsets`. */
+function treeRowEdgePadding(depth: number, insets: { left: number; right: number }) {
+  return {
+    paddingLeft: treeRowPaddingLeft(depth) + insets.left,
+    paddingRight: WORKSPACE_PANE_TRAILING_GLYPH_RAIL + insets.right,
+  };
+}
+
 function listRowKeyExtractor(row: ExplorerListRow) {
   if (row.type === "entry") {
     return row.row.entry.path;
@@ -189,6 +199,11 @@ function EntryNameInputRow({
   const { t } = useTranslation();
   const [name, setName] = useState(initialName);
   const settledRef = useRef(false);
+  const rowInsets = useTreeRowInsets();
+  const rowStyle = useMemo(
+    () => [workspaceTreeRowStyles.row, treeRowEdgePadding(depth, rowInsets)],
+    [depth, rowInsets],
+  );
 
   const commit = useCallback(() => {
     if (settledRef.current) {
@@ -214,7 +229,7 @@ function EntryNameInputRow({
   );
 
   return (
-    <View style={[workspaceTreeRowStyles.row, { paddingLeft: treeRowPaddingLeft(depth) }]}>
+    <View style={rowStyle}>
       <View style={styles.entryInfo}>
         <View style={styles.entryIcon}>
           {kind === "directory" ? (
@@ -303,13 +318,14 @@ function TreeRowItem({
     [entry],
   );
 
+  const rowInsets = useTreeRowInsets();
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       workspaceTreeRowStyles.row,
-      { paddingLeft: treeRowPaddingLeft(depth) },
+      treeRowEdgePadding(depth, rowInsets),
       (Boolean(hovered) || pressed || isSelected || isDropTarget) && workspaceTreeRowStyles.active,
     ],
-    [depth, isDropTarget, isSelected],
+    [depth, isDropTarget, isSelected, rowInsets],
   );
 
   const handleCopy = useCallback(() => {
@@ -1350,10 +1366,8 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
   return (
     <View style={[styles.treePane, styles.treePaneFill]}>
       <PaneContentToolbar
-        style={[
-          styles.paneHeader,
-          { paddingRight: paneContentToolbarTrailingPadding(isCompact, "glyph") },
-        ]}
+        style={styles.paneHeader}
+        paddingRight={paneContentToolbarTrailingPadding(isCompact, "glyph")}
         testID="files-pane-header"
       >
         <Pressable

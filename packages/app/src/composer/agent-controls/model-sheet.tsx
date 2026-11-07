@@ -6,6 +6,7 @@ import type { AgentProvider } from "@getpaseo/protocol/agent-types";
 import type { AgentProfilePicker, AgentProfileSeed } from "@/agent-profiles";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
+import { SheetFullBleedView } from "@/components/ui/isolated-bottom-sheet-modal";
 import { useProviderIcon } from "@/components/provider-icons";
 import { ModelBrowser, useModelBrowser } from "@/components/model-browser";
 import { resolveModelBrowserScrolling } from "@/components/model-browser-view";
@@ -240,7 +241,8 @@ export function CompactModelSheet({
   );
   const mobileRootContent = useMemo(
     () => (
-      <View style={styles.mobileRootContent} testID="agent-controls-settings-list">
+      // Its top rule reaches the sheet's edges; the controls stay inside the side insets.
+      <SheetFullBleedView style={styles.mobileRootContent} testID="agent-controls-settings-list">
         <View style={styles.controlsContent}>
           <AgentControlTrigger
             icon={ModelIcon}
@@ -256,7 +258,7 @@ export function CompactModelSheet({
           />
           {children}
         </View>
-      </View>
+      </SheetFullBleedView>
     ),
     [ModelIcon, children, disabled, openModelBrowser, rootBrowser.selectedModelLabel, t],
   );
@@ -301,7 +303,8 @@ export function CompactModelSheet({
         contentStyle={styles.sheetBody}
         testID="agent-controls-model-sheet"
       >
-        <View
+        {/* The panel's background reaches the sheet's edges under the side insets. */}
+        <SheetFullBleedView
           style={[
             styles.modelViewport,
             usesBottomSheet ? styles.flexibleModelViewport : styles.fixedModelViewport,
@@ -321,7 +324,7 @@ export function CompactModelSheet({
             searchAllOnFocus={usesBottomSheet}
             rootBrowseContent={usesBottomSheet ? mobileRootContent : undefined}
           />
-        </View>
+        </SheetFullBleedView>
         {!usesBottomSheet ? (
           <>
             <View style={styles.modelViewportDivider} />
@@ -349,7 +352,8 @@ export function CompactModelSheet({
           contentStyle={styles.sheetBody}
           testID="agent-controls-model-browser-sheet"
         >
-          <View
+          {/* The panel's background reaches the sheet's edges under the side insets. */}
+          <SheetFullBleedView
             style={[styles.modelViewport, styles.flexibleModelViewport]}
             testID="agent-controls-model-browser-viewport"
           >
@@ -365,7 +369,7 @@ export function CompactModelSheet({
               searchAllOnFocus
               showProfilesSection={false}
             />
-          </View>
+          </SheetFullBleedView>
         </AdaptiveModalSheet>
       ) : null}
     </>

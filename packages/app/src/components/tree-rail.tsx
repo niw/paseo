@@ -10,6 +10,7 @@ import {
   SIDEBAR_RESIZE_FAIL_OFFSET,
 } from "@/components/sidebar-resize-handle-layout";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
+import { HorizontalSafeAreaRegion } from "@/components/safe-area-edges";
 import {
   acceptTreeRailContainerMeasurement,
   resolveVisibleTreeRailWidth,
@@ -83,6 +84,8 @@ export function TreeRail({ children, testID, width, onWidthChange, minimumWidth 
     ],
   );
   const railWidthStyle = useAnimatedStyle(() => ({ width: resizeWidth.value }));
+  // The content and the rail are regions side by side: each keeps clear of the inset of the window
+  // edge it touches, so the content leaves the right edge's inset to the rail.
   const handleLayout = useCallback(
     (event: { nativeEvent: { layout: { width: number } } }) =>
       setContainerWidth((currentWidth) =>
@@ -94,7 +97,9 @@ export function TreeRail({ children, testID, width, onWidthChange, minimumWidth 
   return (
     <View style={styles.container} testID={testID} onLayout={handleLayout}>
       <View style={styles.content} testID={testID ? `${testID}-content` : undefined}>
-        {content}
+        <HorizontalSafeAreaRegion edges={CONTENT_SAFE_AREA_EDGES}>
+          {content}
+        </HorizontalSafeAreaRegion>
       </View>
       <Animated.View
         style={[styles.rail, railWidthStyle]}
@@ -106,11 +111,14 @@ export function TreeRail({ children, testID, width, onWidthChange, minimumWidth 
           pressed={resizePressed}
           testID={testID ? `${testID}-resize-handle` : "tree-rail-resize-handle"}
         />
-        {tree}
+        <HorizontalSafeAreaRegion edges={RAIL_SAFE_AREA_EDGES}>{tree}</HorizontalSafeAreaRegion>
       </Animated.View>
     </View>
   );
 }
+
+const CONTENT_SAFE_AREA_EDGES = { left: true, right: false } as const;
+const RAIL_SAFE_AREA_EDGES = { left: false, right: true } as const;
 
 const styles = StyleSheet.create((theme) => ({
   container: {

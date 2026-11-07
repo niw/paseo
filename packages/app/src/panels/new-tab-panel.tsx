@@ -7,6 +7,7 @@ import {
   type ComponentType,
   type ReactElement,
 } from "react";
+import { useHorizontalSafeAreaPadding } from "@/components/safe-area-edges";
 import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus } from "lucide-react-native";
@@ -133,6 +134,12 @@ const NewTabPanel = memo(function NewTabPanel(): ReactElement {
   const { host, serverId, tabId } = usePaneContext();
   const { isInteractive, focusPane } = usePaneFocus();
   const containerRef = useRef<View | null>(null);
+  // The panel scrolls edge to edge; its launcher rows stay inside the side insets.
+  const safeAreaPadding = useHorizontalSafeAreaPadding(SPACING[6]);
+  const scrollContentStyle = useMemo(
+    () => [styles.scrollContent, safeAreaPadding],
+    [safeAreaPadding],
+  );
   const groups = useWorkspaceTabLaunchCatalog({
     serverId,
     purpose: host === "explorer" ? "supporting" : "primary",
@@ -244,7 +251,7 @@ const NewTabPanel = memo(function NewTabPanel(): ReactElement {
 
   return (
     <View ref={containerRef} style={styles.container} testID="workspace-new-tab-panel">
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={scrollContentStyle}>
         <View style={styles.rail}>
           {groups.map((group) => (
             <View key={group.id} style={styles.group}>

@@ -1,4 +1,5 @@
 import { useMemo, type ReactNode } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Text,
   View,
@@ -25,14 +26,31 @@ import { WORKSPACE_PANE_TRAILING_GLYPH_RAIL } from "@/components/tree-primitives
 export function PaneContentToolbar({
   children,
   style,
+  paddingLeft = 0,
+  paddingRight = 0,
   testID,
 }: {
   children: ReactNode;
+  /** Don't set horizontal padding here: the toolbar's own padding replaces it. */
   style?: StyleProp<ViewStyle>;
+  /** The row's padding inside the side safe-area insets. */
+  paddingLeft?: number;
+  paddingRight?: number;
   testID?: string;
 }) {
+  // The pane's content runs under the side insets; its toolbar's border does too, and its
+  // controls stay inside them.
+  const { left, right } = useSafeAreaInsets();
+  const toolbarStyle = useMemo(
+    () => [
+      styles.toolbar,
+      style,
+      { paddingLeft: paddingLeft + left, paddingRight: paddingRight + right },
+    ],
+    [left, paddingLeft, paddingRight, right, style],
+  );
   return (
-    <View style={[styles.toolbar, style]} testID={testID}>
+    <View style={toolbarStyle} testID={testID}>
       {children}
     </View>
   );

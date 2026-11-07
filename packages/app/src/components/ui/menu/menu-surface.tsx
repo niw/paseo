@@ -11,11 +11,11 @@ import {
 import { useTranslation } from "react-i18next";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { ChevronLeft } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   IsolatedBottomSheetModal,
+  SheetScrollView,
   useIsolatedBottomSheetVisibility,
   type ContextBridge,
 } from "@/components/ui/isolated-bottom-sheet-modal";
@@ -471,7 +471,7 @@ function MenuSheetScrollView({
     [safeAreaInsets.bottom],
   );
   return (
-    <BottomSheetScrollView
+    <SheetScrollView
       dataSet={dataSet}
       contentContainerStyle={contentStyle}
       keyboardShouldPersistTaps="handled"
@@ -479,7 +479,7 @@ function MenuSheetScrollView({
       testID={testID ? `${testID}-content` : undefined}
     >
       {children}
-    </BottomSheetScrollView>
+    </SheetScrollView>
   );
 }
 

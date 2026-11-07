@@ -1,4 +1,5 @@
 import { ChatFind, ChatFindExpansion } from "@/agent-stream/chat-find";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import React, {
   forwardRef,
@@ -1061,12 +1062,18 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     }, [baseRenderModel, pendingPermissionsNode, turnFooterNode]);
 
     const emptyStateStyle = useMemo(() => [stylesheet.emptyState, stylesheet.contentWrapper], []);
+    // The stream runs under the side insets; the button centers between them.
+    const safeAreaInsets = useSafeAreaInsets();
     const scrollToBottomContainerStyle = useMemo(
       () => [
         stylesheet.scrollToBottomContainer,
-        { bottom: resolveBottomOverlayControlOffset(bottomOverlayControlClearance) },
+        {
+          bottom: resolveBottomOverlayControlOffset(bottomOverlayControlClearance),
+          left: safeAreaInsets.left,
+          right: safeAreaInsets.right,
+        },
       ],
-      [bottomOverlayControlClearance],
+      [bottomOverlayControlClearance, safeAreaInsets.left, safeAreaInsets.right],
     );
     const listEmptyComponent = useMemo(
       () =>

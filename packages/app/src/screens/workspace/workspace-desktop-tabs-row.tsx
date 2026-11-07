@@ -1,4 +1,6 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useTopRowExtraInsets } from "@/components/safe-area-edges";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import React, {
   Fragment,
   useCallback,
@@ -1078,12 +1080,24 @@ function ResolvedWorkspaceDesktopTabsRow({
     updateMeasuredWidth(setExitFocusModeWidth, event);
   }, []);
 
+  // The row's border runs under the horizontal safe-area insets; its tabs stay inside them.
+  // At the top of the explorer the row also clears an occluded corner of a shared top band.
+  const safeAreaInsets = useSafeAreaInsets();
+  const topRowExtraInsets = useTopRowExtraInsets();
+  const paddingLeft = safeAreaInsets.left + topRowExtraInsets.left;
+  const paddingRight = safeAreaInsets.right + topRowExtraInsets.right;
+  const safeAreaPaddingStyle = useMemo(
+    () => ({ paddingLeft, paddingRight }),
+    [paddingLeft, paddingRight],
+  );
+  const safeAreaReservedWidth = paddingLeft + paddingRight;
   const layoutMetrics = useMemo(
     () => ({
       rowHorizontalInset: 0,
       actionsReservedWidth: Math.max(
         0,
-        DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH +
+        safeAreaReservedWidth +
+          DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH +
           (focusModeEnabled ? exitFocusModeWidth : 0) +
           (showPaneSplitActions ? PANE_SPLIT_ACTIONS_RESERVED_WIDTH : 0) +
           (showPaneMaximizeAction ? PANE_MAXIMIZE_ACTION_RESERVED_WIDTH : 0),
@@ -1097,7 +1111,13 @@ function ResolvedWorkspaceDesktopTabsRow({
       tabHorizontalPadding: TAB_CHIP_HORIZONTAL_PADDING,
       closeButtonWidth: TAB_CLOSE_BUTTON_RESERVED_WIDTH,
     }),
-    [exitFocusModeWidth, focusModeEnabled, showPaneMaximizeAction, showPaneSplitActions],
+    [
+      exitFocusModeWidth,
+      focusModeEnabled,
+      safeAreaReservedWidth,
+      showPaneMaximizeAction,
+      showPaneSplitActions,
+    ],
   );
 
   const panePanelKinds = useMemo(() => tabs.map(({ tab }) => tab.kind), [tabs]);
@@ -1370,7 +1390,7 @@ function ResolvedWorkspaceDesktopTabsRow({
 
   const row = (
     <View
-      style={[styles.tabsContainer, onSidebar && styles.tabsContainerSidebar]}
+      style={[styles.tabsContainer, onSidebar && styles.tabsContainerSidebar, safeAreaPaddingStyle]}
       testID="workspace-tabs-row"
       onLayout={handleTabsContainerLayout}
     >
