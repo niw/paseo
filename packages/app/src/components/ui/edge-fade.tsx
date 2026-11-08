@@ -21,8 +21,12 @@ interface EdgeFadeSvgProps {
 
 function EdgeFadeSvg({ gradientId, color, edge, solidFraction }: EdgeFadeSvgProps) {
   const fromTop = edge === "top";
+  // Draw in a unit viewBox. iOS react-native-svg caches a shape's path, with percentages resolved
+  // against the canvas, and keeps it when the view resizes, so a "100%" rect stays at its first
+  // size: after the window widens, the fade stops short. The viewBox scale is recomputed on every
+  // draw, so the unit rect always fills the view.
   return (
-    <Svg width="100%" height="100%" preserveAspectRatio="none">
+    <Svg width="100%" height="100%" viewBox="0 0 1 1" preserveAspectRatio="none">
       <Defs>
         <SvgLinearGradient
           id={gradientId}
@@ -39,7 +43,7 @@ function EdgeFadeSvg({ gradientId, color, edge, solidFraction }: EdgeFadeSvgProp
           <Stop offset={1} stopColor={color} stopOpacity={0} />
         </SvgLinearGradient>
       </Defs>
-      <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${gradientId})`} />
+      <Rect x={0} y={0} width={1} height={1} fill={`url(#${gradientId})`} />
     </Svg>
   );
 }
