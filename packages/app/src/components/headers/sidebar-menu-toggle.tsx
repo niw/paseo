@@ -121,6 +121,22 @@ export function SidebarMenuToggle({ style, ...props }: SidebarMenuToggleProps = 
   return <SidebarMenuToggleButton {...props} isMobile={isMobile} resolvedStyle={resolvedStyle} />;
 }
 
+/**
+ * The toggle in a vertical bar of workspace actions (`WindowLayoutActions`). The bar replaces the
+ * header's leading toggle, so it always renders, whichever corner the content owns.
+ */
+export function BarSidebarMenuToggle(props: Omit<SidebarMenuToggleProps, "style">) {
+  const isMobile = useIsCompactFormFactor();
+  return (
+    <SidebarMenuToggleButton
+      tooltipSide="left"
+      {...props}
+      isMobile={isMobile}
+      resolvedStyle={undefined}
+    />
+  );
+}
+
 export function WindowSidebarMenuToggle({ style, ...props }: SidebarMenuToggleProps = {}) {
   const resolvedStyle = useMemo(() => [styles.leadingToggle, style], [style]);
   return (

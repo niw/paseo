@@ -1,6 +1,7 @@
 import { Fragment, useMemo, type ReactNode } from "react";
 import { usePanelStore } from "@/stores/panel-store";
 import { CompactHeader } from "@/components/headers/compact-header";
+import { BarSidebarMenuToggle } from "@/components/headers/sidebar-menu-toggle";
 import { WorkspaceHeaderProjectRow } from "@/screens/workspace/workspace-header-project-row";
 import {
   useWindowLayout,
@@ -62,12 +63,19 @@ export function CompactWorkspaceHeader({
   const actions = resolveWorkspaceBarActions(headerVariant).map((symbol) => (
     <Fragment key={symbol}>{symbols[symbol]}</Fragment>
   ));
+  // In the bar the sidebar toggle leads the actions instead of the header.
+  const barActions = (
+    <>
+      <BarSidebarMenuToggle />
+      {actions}
+    </>
+  );
 
   return (
     <IconButtonChromeProvider value="header-island">
       {headerVariant === "compact" ? (
         <CompactHeader
-          navigation="menu"
+          navigation={actionsInBar ? "none" : "menu"}
           inDesktopTitlebar={inDesktopTitlebar}
           title={title}
           titleTestID="workspace-header-title"
@@ -77,7 +85,7 @@ export function CompactWorkspaceHeader({
         />
       ) : null}
       <WorkspaceWindowActions isRouteFocused={isRouteFocused} isCompact={isCompact}>
-        {actions}
+        {barActions}
       </WorkspaceWindowActions>
     </IconButtonChromeProvider>
   );
