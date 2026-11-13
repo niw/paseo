@@ -1,6 +1,7 @@
 import { Fragment, useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { CompactHeader } from "@/components/headers/compact-header";
+import { BarSidebarMenuToggle } from "@/components/headers/sidebar-menu-toggle";
 import {
   EXPLORER_TOGGLE_KEYS,
   WorkspaceExplorerToggle,
@@ -76,12 +77,19 @@ export function CompactWorkspaceHeader({
   const actions = resolveWorkspaceBarActions(headerVariant).map((symbol) => (
     <Fragment key={symbol}>{symbols[symbol]}</Fragment>
   ));
+  // In the bar the sidebar toggle leads the actions instead of the header.
+  const barActions = (
+    <>
+      <BarSidebarMenuToggle />
+      {actions}
+    </>
+  );
 
   return (
     <IconButtonChromeProvider value="header-island">
       {headerVariant === "compact" ? (
         <CompactHeader
-          navigation="menu"
+          navigation={actionsInBar ? "none" : "menu"}
           title={title}
           titleTestID="workspace-header-title"
           subtitle={projectRow}
@@ -89,7 +97,7 @@ export function CompactWorkspaceHeader({
           actions={actionsInBar ? undefined : actions}
         />
       ) : null}
-      <WindowLayoutActions active={actionsActive}>{actions}</WindowLayoutActions>
+      <WindowLayoutActions active={actionsActive}>{barActions}</WindowLayoutActions>
     </IconButtonChromeProvider>
   );
 }
