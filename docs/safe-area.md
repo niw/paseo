@@ -12,8 +12,8 @@ left or right, with a top inset of 0, in both the folded portrait (compact) and 
 
 The window layout probe also reports where the system places a vertical bar, a fold division and a
 bottom bar (`packages/app/src/window-layout/`). Beside a trailing vertical bar the workspace
-actions move into the bar, in the side inset on its edge. A fold division sets the sidebar's
-width, and the bottom bar's clearance replaces the bottom inset.
+actions and the sidebar toggle move into the bar, in the side inset on its edge. A fold division
+sets the sidebar's width, and the bottom bar's clearance replaces the bottom inset.
 
 The vertical bar turns its side inset into a column of controls, so text no longer runs under it:
 `useVerticalBarInsets()` gives the inset on the bar's edge, and the chat, a terminal grid and a
