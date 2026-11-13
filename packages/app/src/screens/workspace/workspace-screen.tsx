@@ -3387,7 +3387,7 @@ function WorkspaceScreenContent({
         <ScreenHeader
           left={
             <>
-              <SidebarMenuToggle />
+              {workspaceActionsInBar ? null : <SidebarMenuToggle />}
               <WorkspaceHeaderTitleBar
                 isLoading={isWorkspaceHeaderLoading}
                 title={workspaceHeaderTitle}
@@ -3422,6 +3422,7 @@ function WorkspaceScreenContent({
       openImportSheet,
       showScreenHeader,
       showWorkspaceSetup,
+      workspaceActionsInBar,
       workspaceDirectory,
       workspaceHeaderSubtitle,
       workspaceHeaderTitle,
