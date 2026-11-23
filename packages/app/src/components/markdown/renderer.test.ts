@@ -15,6 +15,61 @@ import { darkTheme, lightTheme } from "@/styles/theme";
 import { createMarkdownStyles } from "./styles";
 import { isRecognizedLink, prepareMarkdownSource, PENDING_MARKDOWN_IMAGE } from "./source";
 import { normalizeMarkdownHtml } from "./html";
+import { splitVisualizeMarkdown } from "./visualize/reference";
+
+describe("Visualize references in assistant Markdown", () => {
+  const reference =
+    '\uE200visualize\uE202{"path":"/tmp/図 [1].html","mode":"wide","title":"図のタイトル"}\uE201';
+
+  it("renders a standalone reference between adjacent lines of prose", () => {
+    expect(splitVisualizeMarkdown(`Before\r\n${reference}\r\nAfter`, false)).toEqual([
+      { kind: "markdown", offset: 0, source: "Before\r\n" },
+      {
+        kind: "visualize",
+        offset: 8,
+        reference: { path: "/tmp/図 [1].html", mode: "wide", title: "図のタイトル" },
+      },
+      { kind: "markdown", offset: reference.length + 10, source: "After" },
+    ]);
+  });
+
+  it("preserves literal examples and ignores invalid references", () => {
+    for (const example of [
+      `Before ${reference}`,
+      `${reference} after`,
+      `> ${reference}`,
+      `    ${reference}`,
+      `\`\`\`text\n${reference}\n\`\`\``,
+      `\`code\n${reference}\ncode\``,
+      `<!--\n${reference}\n-->`,
+      reference.replace("/tmp/", ""),
+      reference.replace(".html", ".txt"),
+      reference.replace('"wide"', "false"),
+      reference.replace('"path"', '"url"'),
+    ]) {
+      expect(splitVisualizeMarkdown(example, false)).toBeNull();
+    }
+  });
+
+  it("keeps an unfinished reference out of the streamed prose", () => {
+    for (const length of [1, 5, 12, reference.length - 1, reference.length]) {
+      expect(splitVisualizeMarkdown(`Before\n${reference.slice(0, length)}`, true)).toEqual([
+        { kind: "markdown", offset: 0, source: "Before\n" },
+      ]);
+    }
+    expect(splitVisualizeMarkdown(`\`\`\`\n${reference.slice(0, 5)}`, true)).toBeNull();
+  });
+
+  it("retains document-wide definitions when a visualization splits the prose", () => {
+    expect(
+      splitVisualizeMarkdown(`[Docs][id]\n\n${reference}\n\n[id]: https://paseo.sh`, false),
+    ).toMatchObject([
+      { kind: "markdown", source: "[id]: <https://paseo.sh>\n\n[Docs][id]\n\n" },
+      { kind: "visualize" },
+      { kind: "markdown", source: "[id]: <https://paseo.sh>\n\n\n[id]: https://paseo.sh" },
+    ]);
+  });
+});
 
 it("recognizes complete known commands in inline code", () => {
   const names = new Set(["code-review", "review:fast"]);

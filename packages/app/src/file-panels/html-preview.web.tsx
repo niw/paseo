@@ -23,7 +23,15 @@ const iframeStyle = {
   backgroundColor: "white",
 } as const;
 
-export function FileHtmlPreview({ html, testID }: { html: string; testID?: string }) {
+export function FileHtmlPreview({
+  html,
+  testID,
+  title,
+}: {
+  html: string;
+  testID?: string;
+  title?: string;
+}) {
   const { t } = useTranslation();
   // A document URL lets the browser resolve fragment links within the preview.
   // srcDoc would inherit the app URL and navigate the frame back into Paseo.
@@ -38,7 +46,7 @@ export function FileHtmlPreview({ html, testID }: { html: string; testID?: strin
     <iframe
       key={source}
       data-testid={testID}
-      title={t("panels.file.filePanels.builtin.html")}
+      title={title ?? t("panels.file.filePanels.builtin.html")}
       src={source}
       sandbox={SANDBOX}
       referrerPolicy="no-referrer"

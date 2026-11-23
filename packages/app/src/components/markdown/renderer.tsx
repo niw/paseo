@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from "react";
+import { View } from "react-native";
 import { EnrichedMarkdownText, type LinkPressEvent } from "react-native-enriched-markdown";
-import { withUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   useAssistantFileLinkActions,
   useAssistantFileLinkEnvironment,
@@ -22,6 +23,8 @@ import { splitStreamingMarkdown } from "./streaming";
 import { useMarkdownSource, type MarkdownImageContext } from "./images";
 
 import { MermaidFence, MermaidStreamingContext, splitMermaidFences } from "./fence/mermaid";
+import { splitVisualizeMarkdown } from "./visualize/reference";
+import { VisualizePreview } from "./visualize/preview";
 
 const ThemedMarkdown = withUnistyles(EnrichedMarkdownText);
 const MD4C_FLAGS = { latexMath: false, hardSoftBreaks: true, admonitions: true };
@@ -62,6 +65,44 @@ export interface MarkdownRendererProps extends MarkdownImageContext {
    */
   external?: boolean;
 }
+
+export const AssistantMarkdown = memo(function AssistantMarkdown(props: MarkdownRendererProps) {
+  const streaming = props.streaming ?? false;
+  const segments = useMemo(
+    () => splitVisualizeMarkdown(props.text, streaming),
+    [props.text, streaming],
+  );
+  if (!segments) return <MarkdownRenderer {...props} />;
+  return (
+    <MarkdownBlockStack>
+      {segments.map((segment) => {
+        if (segment.kind === "visualize") {
+          const { reference } = segment;
+          return (
+            <VisualizePreview
+              key={`${segment.offset}:${reference.path}`}
+              reference={reference}
+              context={props}
+            />
+          );
+        }
+        return (
+          <View key={`text:${segment.offset}`} style={assistantStyles.prose}>
+            <MarkdownRenderer {...props} text={segment.source} />
+          </View>
+        );
+      })}
+    </MarkdownBlockStack>
+  );
+});
+
+const assistantStyles = StyleSheet.create((theme) => ({
+  prose: {
+    width: "100%",
+    maxWidth: theme.contentMaxWidth,
+    alignSelf: "center",
+  },
+}));
 
 /** All Markdown surfaces share the same engine and source adaptation. */
 export const MarkdownRenderer = memo(function MarkdownRenderer(props: MarkdownRendererProps) {
