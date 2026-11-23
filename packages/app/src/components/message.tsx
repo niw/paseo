@@ -11,7 +11,7 @@ import {
   AttachmentLabel,
   AttachmentThumbnail,
 } from "@/components/attachment-pill";
-import { MarkdownRenderer } from "@/components/markdown/renderer";
+import { AssistantMarkdown } from "@/components/markdown/renderer";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import {
   isRewindableMessage,
@@ -1272,7 +1272,7 @@ export const AssistantMessage = memo(function AssistantMessage({
       style={assistantContainerStyle}
       onLayout={measureMessage}
     >
-      <MarkdownRenderer
+      <AssistantMarkdown
         text={revealedMessage}
         agentCommands
         streaming={phase !== "complete" || revealedMessage.length < renderedMessage.text.length}

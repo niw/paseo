@@ -43,6 +43,7 @@ import {
   MessageOuterSpacingProvider,
   type InlinePathTarget,
 } from "@/components/message";
+import { hasWideVisualize, VISUALIZE_WIDE_WIDTH } from "@/components/markdown/visualize/reference";
 import { PlanCard } from "@/components/plan-card";
 import { getStreamItemMessageId, type StreamItem } from "@/types/stream";
 import type { PendingMessageSubmission } from "@/composer/submission/model";
@@ -177,6 +178,7 @@ function renderStreamItemWithTurnFooter(input: {
   layoutItem: StreamLayoutItem;
   turnIndent: TurnIndent;
   strategy: TurnContentStrategy;
+  contentMaxWidth?: number;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }): ReactNode {
@@ -201,6 +203,11 @@ function renderStreamItemWithTurnFooter(input: {
       gapBelow={input.layoutItem.gapBelow}
       turnIndent={input.turnIndent}
       runsUnderInsets={rowRunsUnderInsets(input.layoutItem)}
+      contentMaxWidth={input.contentMaxWidth}
+      wide={
+        input.layoutItem.item.kind === "assistant_message" &&
+        hasWideVisualize(input.layoutItem.item.text)
+      }
     >
       {input.content}
     </StreamItemWrapper>
@@ -988,11 +995,13 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           layoutItem,
           turnIndent: getTurnIndent(layoutItem),
           strategy: streamRenderStrategy,
+          contentMaxWidth,
           supportsTimelineCursor: supportsAgentForkContextCursor,
           onForkAssistantTurn: readOnly ? undefined : handleForkAssistantTurn,
         });
       },
       [
+        contentMaxWidth,
         getTurnIndent,
         handleForkAssistantTurn,
         readOnly,
@@ -1761,6 +1770,10 @@ const stylesheet = StyleSheet.create((theme) => ({
     alignSelf: "center",
     paddingHorizontal: theme.spacing[2],
   },
+  wideStreamItem: (width: number | undefined) => ({
+    maxWidth:
+      width === undefined ? "100%" : Math.max(width, VISUALIZE_WIDE_WIDTH + 2 * theme.spacing[2]),
+  }),
   emptyState: {
     flex: 1,
     alignItems: "center",
@@ -1902,6 +1915,8 @@ interface StreamItemWrapperProps {
   gapBelow: number;
   turnIndent: TurnIndent;
   runsUnderInsets: boolean;
+  wide: boolean;
+  contentMaxWidth?: number;
   children: ReactNode;
 }
 
@@ -1909,16 +1924,19 @@ function StreamItemWrapper({
   gapBelow,
   turnIndent,
   runsUnderInsets,
+  wide,
+  contentMaxWidth,
   children,
 }: StreamItemWrapperProps) {
   const controlsPadding = useStreamControlsRowPadding();
   const wrapperStyle = useMemo(
     () => [
       stylesheet.streamItemWrapper,
+      wide && stylesheet.wideStreamItem(contentMaxWidth),
       { marginBottom: turnIndent === "nested" || turnIndent === "openedHost" ? 0 : gapBelow },
       runsUnderInsets ? null : controlsPadding,
     ],
-    [controlsPadding, gapBelow, runsUnderInsets, turnIndent],
+    [contentMaxWidth, controlsPadding, gapBelow, runsUnderInsets, turnIndent, wide],
   );
   const gapStyle = useMemo(() => ({ paddingBottom: gapBelow }), [gapBelow]);
   switch (turnIndent) {
