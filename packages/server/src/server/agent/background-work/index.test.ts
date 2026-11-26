@@ -48,6 +48,13 @@ describe("AgentBackgroundWorkStore", () => {
     expect(store.summary("agent-a")).toBeUndefined();
   });
 
+  test("lists provider work without counting it as running", () => {
+    const store = new AgentBackgroundWorkStore();
+    store.apply("agent-a", [{ id: "bash-1", kind: "shell", description: "npm run dev" }], T0);
+
+    expect(store.summary("agent-a")).toEqual({ count: 1, runningCount: 0 });
+  });
+
   test("keeps the first occurrence of a duplicated id", () => {
     const store = new AgentBackgroundWorkStore();
 

@@ -15803,7 +15803,7 @@ test("lists and stops heartbeat background work across provider session closure"
     await vi.waitFor(() =>
       expect(manager.getAgentBackgroundWorkSummary(agent.id)).toEqual({
         count: 2,
-        runningCount: 1,
+        runningCount: 0,
       }),
     );
     const providerItem = manager
