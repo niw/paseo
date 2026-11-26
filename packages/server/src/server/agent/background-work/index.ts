@@ -151,7 +151,10 @@ export class AgentBackgroundWorkStore {
     if (!items && !daemonItems) return undefined;
 
     const count = (items?.length ?? 0) + (daemonItems?.size ?? 0);
-    let runningCount = items?.length ?? 0;
+    // Provider work (background shells, monitors) outlives the turn and may never end, such as a
+    // dev server, so it is listed without keeping the agent and its workspace Running. Provider
+    // subagents report through the subagents track instead.
+    let runningCount = 0;
     for (const work of daemonItems?.values() ?? []) {
       if (work.countsAsRunning) runningCount++;
     }
